@@ -4,18 +4,10 @@
 
 It swaps only the active auth file. Your main Codex history, logs, sessions, and other state stay shared.
 
-## Status
-
-- Public GitHub repository: ready
-- npm package name: selected as `codex-auth-switch`
-
-For now, the supported installation path is running from this repository checkout. Package-install instructions will be added after the package is published.
-
 ## Before You Start
 
-- **This tool runs as `./codex-auth-switch ...` in this repository.**
-- Running `pnpm install` and `pnpm build` does **not** create a global `codex-auth-switch` command.
-- `./codex-auth-switch` is a small wrapper that runs `node dist/index.mjs`.
+- **This tool runs as `./codex-auth-switch ...` from this repository's root.**
+- `pnpm install && pnpm build` does **not** create a global command. Always invoke via `./codex-auth-switch`.
 
 ## Requirements
 
@@ -26,9 +18,9 @@ For now, the supported installation path is running from this repository checkou
 
 ## Important Constraints
 
-- **File-backed auth only.** `cli_auth_credentials_store` must be `"file"` or `"auto"` resolving to a readable file-backed auth file. Keyring-backed auth is not supported.
+- **File-backed auth only.** Codex's `cli_auth_credentials_store` setting must be `"file"` (or `"auto"` resolving to a file). Keyring-backed auth is not supported.
 - **Email is a label.** `add <email>` stores the email as a user-provided label. It is not verified against the browser session used during `codex login`.
-- **Usage is best-effort.** `usage` depends on upstream behavior that is not a public stable API.
+- **Usage is best-effort.** The `usage` command relies on Codex's internal API, which is not a public stable interface and may change without notice.
 
 ## Install
 
@@ -37,13 +29,13 @@ pnpm install
 pnpm build
 ```
 
-After that, run the CLI like this:
+Verify the build:
 
 ```bash
 ./codex-auth-switch --help
 ```
 
-Windows is not supported at the moment. The CLI currently depends on POSIX process inspection and file-permission behavior.
+> **Note:** Windows is not supported. The CLI depends on POSIX process inspection and file-permission behavior.
 
 ## Quick Start
 
@@ -81,12 +73,7 @@ yes     foo@example.com  8cd075d2-c767-41da-91d4-09ff5585276d  2026-04-04 21:10 
         bar@example.com  a1b2c3d4-e5f6-7890-abcd-1234567890ef  2026-04-03 18:00 local
 ```
 
-Columns:
-
-- active flag
-- email label
-- full `account_id`
-- `last_used_at` in local time
+Columns: active flag, email label, `account_id`, and `last_used_at` in local time.
 
 ### 3. Switch the active account
 
@@ -102,7 +89,7 @@ Direct:
 ./codex-auth-switch use foo@example.com
 ```
 
-This writes the selected auth to `$CODEX_HOME/auth.json`. If `CODEX_HOME` is not set, the default target is `~/.codex/auth.json`.
+This writes the selected auth to `$CODEX_HOME/auth.json` (default: `~/.codex/auth.json`).
 
 Example output:
 
@@ -189,15 +176,9 @@ Reads usage information.
 - `--all`: all saved accounts
 - `--json`: machine-readable output
 
-`--all` continues when one account fails. If the resolved auth belongs to a different `account_id`, the command fails closed for that account.
-If the upstream usage payload reports a different email than the saved label, the human-readable output shows `Observed email`.
+`--all` continues even when individual accounts fail. If the fetched auth belongs to a different `account_id` than expected, that account is treated as an error (fail-closed).
 
-Typical empty state:
-
-```text
-No saved accounts yet.
-Run `./codex-auth-switch add <email>` to register your first account.
-```
+If the upstream response reports a different email than the saved label, the output shows it as `Observed email`.
 
 ## Where Data Is Stored
 
@@ -210,9 +191,8 @@ Managed auth snapshots live outside the main Codex directory:
     <profile_id>.json
 ```
 
-- `email` is the user-facing identifier
-- `profileId` is the internal primary key
-- managed auth paths are derived from `profileId` at runtime
+- `email` — user-facing identifier (the label you pass to commands)
+- `profileId` — internal primary key; auth file paths are derived from it at runtime
 
 Example `state.json`:
 
@@ -239,13 +219,11 @@ MIT
 
 - Atomic replacement of auth and state files
 - Lock-file based concurrency control for `add` and `use`
-- `0700` for directories and `0600` for auth files
+- `0700` for directories, `0600` for auth files
 - No logging of tokens or raw auth payloads
 - Rollback on failed switch when possible
 
-Important risk:
-
-- If `~/.config/codex-auth-switch/` is compromised, every saved session is exposed
+> **Risk:** If `~/.config/codex-auth-switch/` is compromised, every saved session is exposed.
 
 Please report security issues privately as described in [`SECURITY.md`](./SECURITY.md).
 
@@ -259,12 +237,10 @@ Exit codes:
 | `2` | Local state, auth, or lock failure |
 | `3` | External dependency failure |
 
-For structured logs:
+Structured logs (JSON Lines on `stderr`, sensitive fields redacted):
 
 ```bash
 CODEX_AUTH_SWITCH_LOG_LEVEL=debug ./codex-auth-switch usage --all
 ```
 
-- Output format: JSON Lines on `stderr`
-- Levels: `error`, `warn`, `info`, `debug`
-- Sensitive fields are redacted
+Available levels: `error`, `warn`, `info`, `debug`.
