@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+*.log
+*.tsbuildinfo
+.DS_Store
+.idea/
+.vscode/
+.tmp/
+tmp/
+.env
+.env.*
+!.env.example
+.codex-switch/

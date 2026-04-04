@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+entrypoint="$script_dir/dist/index.mjs"
+
+if [ ! -f "$entrypoint" ]; then
+  echo "dist/index.mjs was not found. Run 'pnpm build' first." >&2
+  exit 1
+fi
+
+exec node "$entrypoint" "$@"
