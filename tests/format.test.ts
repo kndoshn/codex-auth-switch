@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { formatAccountList, formatUsageResults } from "../src/lib/format.js";
+import { formatAccountActionResult, formatAccountList, formatUsageResults } from "../src/lib/format.js";
 
 function formatExpectedReset(value: string, anchor: string): string {
   const resetAt = new Date(value);
@@ -111,5 +111,22 @@ describe("formatUsageResults", () => {
     expect(output).toContain("bar@example.com");
     expect(output).toContain("Code   : unauthorized");
     expect(output).toContain("Detail : denied");
+  });
+});
+
+describe("formatAccountActionResult", () => {
+  test("formats removed account output", () => {
+    const output = formatAccountActionResult("Removed account", {
+      profileId: "profile-1",
+      email: "foo@example.com",
+      accountId: "acct-1",
+      authPath: "/tmp/foo.json",
+      createdAt: "2026-04-04T00:00:00.000Z",
+      lastUsedAt: "2026-04-04T00:00:00.000Z",
+    });
+
+    expect(output).toContain("Removed account");
+    expect(output).toContain("Label      : foo@example.com");
+    expect(output).toContain("Account ID : acct-1");
   });
 });

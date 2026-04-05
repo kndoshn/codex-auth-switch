@@ -1,8 +1,8 @@
 import { Command, Option } from "clipanion";
 
+import { promptForSavedAccount } from "./account-prompt.js";
 import { runCommand } from "../lib/command.js";
 import { normalizeEmail } from "../lib/email.js";
-import { NoAccountsError } from "../lib/errors.js";
 import { createLoadingIndicator, runWithLoading } from "../lib/loading.js";
 
 export class UseCommand extends Command {
@@ -25,7 +25,9 @@ export class UseCommand extends Command {
         import("../lib/format.js"),
         import("../services/account-service.js"),
       ]);
-      const targetEmail = this.email ? normalizeEmail(this.email) : await promptForEmail();
+      const targetEmail = this.email
+        ? normalizeEmail(this.email)
+        : (await promptForSavedAccount("Select an account")).email;
       const loading = createLoadingIndicator(this.context.stderr);
       const account = await runWithLoading(loading, `Switching to ${targetEmail}`, () =>
         activateAccount(targetEmail, {
@@ -39,26 +41,6 @@ export class UseCommand extends Command {
       return 0;
     });
   }
-}
-
-async function promptForEmail(): Promise<string> {
-  const [{ listAccounts }, { select }] = await Promise.all([
-    import("../services/account-service.js"),
-    import("@inquirer/prompts"),
-  ]);
-  const { accounts } = await listAccounts();
-  if (accounts.length === 0) {
-    throw new NoAccountsError("No saved accounts are available for selection.");
-  }
-
-  return select({
-    message: "Select an account",
-    choices: accounts.map((account) => ({
-      name: account.email,
-      value: account.email,
-      description: account.accountId,
-    })),
-  });
 }
 
 function formatUseLoading(

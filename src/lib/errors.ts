@@ -77,6 +77,17 @@ export class NoCurrentAccountError extends CodexAuthSwitchError {
   }
 }
 
+export class ActiveAccountRemovalError extends CodexAuthSwitchError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, {
+      ...options,
+      exitCode: 1,
+      displayMessage:
+        "Cannot remove the active account while other saved accounts remain. Switch to another account with `./codex-auth-switch use <email>` first.",
+    });
+  }
+}
+
 export class CodexLoginFailedError extends CodexAuthSwitchError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, {
@@ -219,6 +230,16 @@ export class LockAcquisitionError extends CodexAuthSwitchError {
       ...options,
       exitCode: 2,
       displayMessage: "Another operation is already running.",
+    });
+  }
+}
+
+export class PromptAbortedError extends CodexAuthSwitchError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, {
+      ...options,
+      exitCode: 0,
+      displayMessage: "Canceled.",
     });
   }
 }
