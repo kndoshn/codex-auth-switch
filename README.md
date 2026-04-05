@@ -52,7 +52,7 @@ Example output:
 ```text
 Added account
 
-  Label      : you@example.com
+  Email      : you@example.com
   Account ID : 8cd075d2-c767-41da-91d4-09ff5585276d
 ```
 
@@ -67,13 +67,15 @@ Example:
 ```text
 Saved accounts (2)
 
-Active  Label            Account ID   Last used
-------  ---------------  -----------  --------------------
-yes     foo@example.com  8cd075d2-c767-41da-91d4-09ff5585276d  2026-04-04 21:10 local
-        bar@example.com  a1b2c3d4-e5f6-7890-abcd-1234567890ef  2026-04-03 18:00 local
+           Email            Account ID                            Last used
+---------  ---------------  ------------------------------------  --------------------
+[Current]  foo@example.com  8cd075d2-c767-41da-91d4-09ff5585276d  2026-04-04 21:10 local
+           bar@example.com  a1b2c3d4-e5f6-7890-abcd-1234567890ef  2026-04-03 18:00 local
+
+Tip: Run `use <email>` to switch accounts.
 ```
 
-Columns: active flag, email label, `account_id`, and `last_used_at` in local time.
+Columns: current marker, email label, `account_id`, and `last_used_at` in local time.
 
 ### 3. Switch the active account
 
@@ -96,7 +98,7 @@ Example output:
 ```text
 Active account
 
-  Label      : foo@example.com
+  Email      : foo@example.com
   Account ID : 8cd075d2-c767-41da-91d4-09ff5585276d
 ```
 
@@ -125,7 +127,7 @@ Example output:
 ```text
 Removed account
 
-  Label      : foo@example.com
+  Email      : foo@example.com
   Account ID : 8cd075d2-c767-41da-91d4-09ff5585276d
 ```
 
@@ -160,13 +162,11 @@ Example:
 ```text
 Usage summary (2 accounts)
 
-foo@example.com
-  Status    : ok
+▶ foo@example.com (Current)
   Observed email : admin@northview.jp
-  Plan      : pro
-  5h limit  : 58% left (resets 14:00)
-  Weekly limit : 90% left (resets 15:00 on 11 Apr)
-  Fetched   : 2026-04-04 21:10 local
+  Plan           : Pro
+  5h limit       : 58% left (resets 14:00)
+  Weekly limit   : 90% left (resets 15:00 on 11 Apr)
 
 bar@example.com
   Status : error
