@@ -101,7 +101,8 @@ describe("command execution", () => {
 
     await runCli(["ls"]);
     expect(stdout.value).toContain("Saved accounts (1)");
-    expect(stdout.value).toContain("yes     foo@example.com");
+    expect(stdout.value).toContain("[Current]");
+    expect(stdout.value).toContain("foo@example.com");
   });
 
   test("add registers an account and prints the normalized email", async () => {
@@ -118,7 +119,7 @@ describe("command execution", () => {
     await runCli(["add", "Foo@Example.com"]);
     expect(mocks.addAccount).toHaveBeenCalledWith("Foo@Example.com", expect.any(Object));
     expect(stdout.value).toContain("Added account");
-    expect(stdout.value).toContain("Label      : foo@example.com");
+    expect(stdout.value).toContain("Email      : foo@example.com");
     expect(stdout.value).toContain("Account ID : acct-1");
   });
 
@@ -129,7 +130,7 @@ describe("command execution", () => {
 
     await runCli(["add", '"admin@northview.jp"']);
     expect(mocks.addAccount).toHaveBeenCalledWith('"admin@northview.jp"', expect.any(Object));
-    expect(stdout.value).toContain("Label      : admin@northview.jp");
+    expect(stdout.value).toContain("Email      : admin@northview.jp");
   });
 
   test("use prompts when email is omitted", async () => {
@@ -152,7 +153,7 @@ describe("command execution", () => {
     expect(mocks.select).toHaveBeenCalled();
     expect(mocks.activateAccount).toHaveBeenCalledWith("foo@example.com", expect.any(Object));
     expect(stdout.value).toContain("Active account");
-    expect(stdout.value).toContain("Label      : foo@example.com");
+    expect(stdout.value).toContain("Email      : foo@example.com");
     expect(stdout.value).toContain("Account ID : acct-1");
   });
 
@@ -177,7 +178,7 @@ describe("command execution", () => {
     expect(mocks.confirm).toHaveBeenCalled();
     expect(mocks.removeAccount).toHaveBeenCalledWith("foo@example.com", expect.any(Object));
     expect(stdout.value).toContain("Removed account");
-    expect(stdout.value).toContain("Label      : foo@example.com");
+    expect(stdout.value).toContain("Email      : foo@example.com");
   });
 
   test("remove skips confirmation with --yes", async () => {
@@ -297,13 +298,13 @@ describe("command execution", () => {
 
     await runCli(["usage"]);
     expect(mocks.getCurrentAccount).toHaveBeenCalledTimes(1);
-    expect(stdout.value).toContain("foo@example.com");
+    expect(stdout.value).toContain("Usage — foo@example.com");
     expect(stdout.value).toContain("Plan");
-    expect(stdout.value).toContain(": pro");
-    expect(stdout.value).toContain("Status");
-    expect(stdout.value).toContain(": ok");
+    expect(stdout.value).toContain(": Pro");
+    expect(stdout.value).not.toContain("Status");
     expect(stdout.value).toContain("5h limit");
     expect(stdout.value).toContain("Weekly limit");
+    expect(stdout.value).toContain("Tip: Run `usage --all` to see all accounts.");
   });
 
   test("usage fetches a specific normalized email when provided", async () => {
@@ -333,6 +334,7 @@ describe("command execution", () => {
     await runCli(["usage", " Foo@Example.com "]);
     expect(mocks.getAccountByEmail).toHaveBeenCalledWith("foo@example.com");
     expect(stdout.value).toContain("foo@example.com");
+    expect(stdout.value).not.toContain("Tip:");
   });
 
   test("usage --all fails when no accounts are registered", async () => {
@@ -368,7 +370,7 @@ describe("command execution", () => {
           lastUsedAt: "2026-04-04T00:00:00.000Z",
         },
       ],
-      currentProfileId: null,
+      currentProfileId: "profile-1",
     });
     mocks.fetchUsageForAll.mockImplementation(async (_accounts, options) => {
       options?.onProgress?.({ total: 2, completed: 1, failed: 1 });
@@ -399,9 +401,11 @@ describe("command execution", () => {
     await runCli(["usage", "--all"]);
 
     expect(stdout.value).toContain("Usage summary (2 accounts)");
-    expect(stdout.value).toContain("foo@example.com");
+    expect(stdout.value).toContain("▶ foo@example.com (Current)");
+    expect(stdout.value).not.toContain("▶ bar@example.com");
     expect(stdout.value).toContain("bar@example.com");
     expect(stdout.value).toContain("rate_limited");
     expect(stdout.value).toContain("Observed email : real@example.com");
+    expect(stdout.value).not.toContain("Tip:");
   });
 });

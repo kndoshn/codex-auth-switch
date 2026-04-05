@@ -41,18 +41,23 @@ export class UsageCommand extends Command {
       }
 
       const loading = createLoadingIndicator(this.context.stderr);
-      const results = this.all
+      const { results, currentEmail } = this.all
         ? await getAllUsage(loading)
-        : [await getSingleUsage(this.email, loading)];
+        : { results: [await getSingleUsage(this.email, loading)], currentEmail: undefined };
+
+      const exitCode = allUsageResultsFailed(results) ? 3 : 0;
 
       if (this.json) {
         this.context.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
-        return allUsageResultsFailed(results) ? 3 : 0;
+        return exitCode;
       }
 
       const { formatUsageResults } = await import("../lib/format.js");
-      this.context.stdout.write(`${formatUsageResults(results)}\n`);
-      return allUsageResultsFailed(results) ? 3 : 0;
+      this.context.stdout.write(`${formatUsageResults(results, {
+        currentEmail,
+        showTip: !this.all && !this.email,
+      })}\n`);
+      return exitCode;
     });
   }
 }
@@ -74,23 +79,29 @@ async function getSingleUsage(
 
 async function getAllUsage(
   loading: ReturnType<typeof createLoadingIndicator>,
-): Promise<UsageResult[]> {
+): Promise<{ results: UsageResult[]; currentEmail: string | undefined }> {
   const [{ listAccounts }, { fetchUsageForAll }] = await Promise.all([
     import("../services/account-service.js"),
     import("../services/usage-service.js"),
   ]);
-  const { accounts } = await listAccounts();
+  const { accounts, currentProfileId } = await listAccounts();
   if (accounts.length === 0) {
     throw new NoAccountsError("No saved accounts are available for usage lookup.");
   }
 
-  return runWithLoading(loading, `Fetching usage for ${accounts.length} accounts`, () =>
+  const currentEmail = currentProfileId
+    ? accounts.find((a) => a.profileId === currentProfileId)?.email
+    : undefined;
+
+  const results = await runWithLoading(loading, `Fetching usage for ${accounts.length} accounts`, () =>
     fetchUsageForAll(accounts, {
       onProgress: ({ total, completed, failed }) => {
         loading.update(formatUsageLoading(total, completed, failed));
       },
     })
   );
+
+  return { results, currentEmail };
 }
 
 function formatUsageLoading(total: number, completed: number, failed: number): string {
