@@ -6,6 +6,7 @@ import { vi } from "vitest";
 
 import {
   AuthReadError,
+  ActiveAccountRemovalError,
   CodexLoginFailedError,
   DuplicateAccountError,
   UnsupportedCredentialStoreError,
@@ -16,9 +17,11 @@ import {
   getAccountByEmail,
   getCurrentAccount,
   listAccounts,
+  removeAccount,
 } from "../src/services/account-service.js";
 import { getAccountAuthPath, getCodexAuthPath, getCodexConfigPath } from "../src/lib/paths.js";
 import * as stateStore from "../src/state/store.js";
+import type { AccountRecord, AppState } from "../src/types.js";
 import { withTempHome } from "./helpers/home.js";
 
 const { execaMock } = vi.hoisted(() => ({
@@ -27,14 +30,64 @@ const { execaMock } = vi.hoisted(() => ({
   })),
 }));
 
+const { assertNoRunningCodexProcessMock } = vi.hoisted(() => ({
+  assertNoRunningCodexProcessMock: vi.fn(async () => undefined),
+}));
+
 vi.mock("../src/lib/process.js", () => ({
-  assertNoRunningCodexProcess: vi.fn(async () => undefined),
+  assertNoRunningCodexProcess: assertNoRunningCodexProcessMock,
   findRunningCodexProcesses: vi.fn(async () => []),
 }));
 
 vi.mock("execa", () => ({
   execa: execaMock,
 }));
+
+function createAccountRecordFixture(
+  profileId: string,
+  email: string,
+  accountId: string,
+  authPath = getAccountAuthPath(profileId),
+): AccountRecord {
+  return {
+    profileId,
+    email,
+    accountId,
+    authPath,
+    createdAt: "2026-04-04T00:00:00.000Z",
+    lastUsedAt: "2026-04-04T00:00:00.000Z",
+  };
+}
+
+function createStateFixture(
+  currentProfileId: string | null,
+  accounts: AccountRecord[],
+): AppState {
+  return {
+    currentProfileId,
+    accounts: Object.fromEntries(accounts.map((account) => [account.profileId, account])),
+  };
+}
+
+function createAuthRaw(accountId: string, accessToken: string): string {
+  return JSON.stringify({
+    tokens: {
+      account_id: accountId,
+      access_token: accessToken,
+    },
+  });
+}
+
+async function writeAuthFixture(path: string, accountId: string, accessToken: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, createAuthRaw(accountId, accessToken), "utf8");
+}
+
+async function writeFileCredentialStoreConfig(): Promise<void> {
+  const currentConfigPath = getCodexConfigPath();
+  await mkdir(dirname(currentConfigPath), { recursive: true });
+  await writeFile(currentConfigPath, 'cli_auth_credentials_store = "file"\n', "utf8");
+}
 
 describe("addAccount", () => {
   afterEach(() => {
@@ -427,6 +480,161 @@ describe("activateAccount", () => {
       });
 
       saveStateSpy.mockRestore();
+    });
+  });
+});
+
+describe("removeAccount", () => {
+  afterEach(() => {
+    assertNoRunningCodexProcessMock.mockReset();
+    assertNoRunningCodexProcessMock.mockResolvedValue(undefined);
+  });
+
+  test("removes an inactive account from state and managed storage", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const currentAccount = createAccountRecordFixture("profile-current", "current@example.com", "acct-current");
+      const targetAccount = createAccountRecordFixture("profile-target", "target@example.com", "acct-target");
+
+      await writeAuthFixture(currentAuthPath, "acct-current", "token-current-active");
+      await writeAuthFixture(currentAccount.authPath, "acct-current", "token-current-stored");
+      await writeAuthFixture(targetAccount.authPath, "acct-target", "token-target-stored");
+      await stateStore.saveState(createStateFixture(currentAccount.profileId, [currentAccount, targetAccount]));
+
+      await removeAccount("target@example.com");
+
+      await expect(stateStore.loadState()).resolves.toEqual({
+        currentProfileId: currentAccount.profileId,
+        accounts: {
+          [currentAccount.profileId]: expect.objectContaining({
+            profileId: currentAccount.profileId,
+            email: currentAccount.email,
+          }),
+        },
+      });
+      await expect(readFile(targetAccount.authPath, "utf8")).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+      await expect(readFile(currentAuthPath, "utf8")).resolves.toContain("token-current-active");
+      expect(assertNoRunningCodexProcessMock).not.toHaveBeenCalled();
+    });
+  });
+
+  test("removes the sole active account and clears the active profile", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const account = createAccountRecordFixture("profile-1", "foo@example.com", "acct-1");
+
+      await writeFileCredentialStoreConfig();
+      await writeAuthFixture(currentAuthPath, account.accountId, "token-active");
+      await writeAuthFixture(account.authPath, account.accountId, "token-stored");
+      await stateStore.saveState(createStateFixture(account.profileId, [account]));
+
+      await removeAccount("foo@example.com");
+
+      await expect(stateStore.loadState()).resolves.toEqual({
+        currentProfileId: null,
+        accounts: {},
+      });
+      await expect(readFile(account.authPath, "utf8")).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+      await expect(readFile(currentAuthPath, "utf8")).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+      expect(assertNoRunningCodexProcessMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  test("refuses to remove the active account while other saved accounts remain", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const currentAccount = createAccountRecordFixture("profile-current", "current@example.com", "acct-current");
+      const targetAccount = createAccountRecordFixture("profile-target", "target@example.com", "acct-target");
+
+      await writeAuthFixture(currentAuthPath, currentAccount.accountId, "token-current-active");
+      await writeAuthFixture(currentAccount.authPath, currentAccount.accountId, "token-current-stored");
+      await writeAuthFixture(targetAccount.authPath, targetAccount.accountId, "token-target-stored");
+      await stateStore.saveState(createStateFixture(currentAccount.profileId, [currentAccount, targetAccount]));
+
+      await expect(removeAccount("current@example.com")).rejects.toBeInstanceOf(ActiveAccountRemovalError);
+
+      await expect(stateStore.loadState()).resolves.toMatchObject({
+        currentProfileId: currentAccount.profileId,
+      });
+      await expect(readFile(currentAccount.authPath, "utf8")).resolves.toContain("token-current-stored");
+      await expect(readFile(targetAccount.authPath, "utf8")).resolves.toContain("token-target-stored");
+      await expect(readFile(currentAuthPath, "utf8")).resolves.toContain("token-current-active");
+      expect(assertNoRunningCodexProcessMock).not.toHaveBeenCalled();
+    });
+  });
+
+  test("restores the removed managed auth when state persistence fails for an inactive removal", async () => {
+    await withTempHome(async () => {
+      const currentAccount = createAccountRecordFixture("profile-current", "current@example.com", "acct-current");
+      const targetAccount = createAccountRecordFixture("profile-target", "target@example.com", "acct-target");
+      const targetRaw = createAuthRaw(targetAccount.accountId, "token-target-stored");
+
+      await writeAuthFixture(currentAccount.authPath, currentAccount.accountId, "token-current-stored");
+      await writeAuthFixture(targetAccount.authPath, targetAccount.accountId, "token-target-stored");
+      await stateStore.saveState(createStateFixture(currentAccount.profileId, [currentAccount, targetAccount]));
+
+      const saveStateSpy = vi.spyOn(stateStore, "saveState").mockRejectedValueOnce(new Error("disk full"));
+
+      await expect(removeAccount("target@example.com")).rejects.toThrow("disk full");
+
+      await expect(readFile(targetAccount.authPath, "utf8")).resolves.toBe(targetRaw);
+      await expect(stateStore.loadState()).resolves.toMatchObject({
+        currentProfileId: currentAccount.profileId,
+        accounts: {
+          [targetAccount.profileId]: expect.objectContaining({
+            email: targetAccount.email,
+          }),
+        },
+      });
+
+      saveStateSpy.mockRestore();
+    });
+  });
+
+  test("restores both auth files when state persistence fails for the sole active removal", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const account = createAccountRecordFixture("profile-1", "foo@example.com", "acct-1");
+      const storedRaw = createAuthRaw(account.accountId, "token-stored");
+      const activeRaw = createAuthRaw(account.accountId, "token-active");
+
+      await writeFileCredentialStoreConfig();
+      await writeAuthFixture(currentAuthPath, account.accountId, "token-active");
+      await writeAuthFixture(account.authPath, account.accountId, "token-stored");
+      await stateStore.saveState(createStateFixture(account.profileId, [account]));
+
+      const saveStateSpy = vi.spyOn(stateStore, "saveState").mockRejectedValueOnce(new Error("disk full"));
+
+      await expect(removeAccount("foo@example.com")).rejects.toThrow("disk full");
+
+      await expect(readFile(account.authPath, "utf8")).resolves.toBe(storedRaw);
+      await expect(readFile(currentAuthPath, "utf8")).resolves.toBe(activeRaw);
+      await expect(stateStore.loadState()).resolves.toMatchObject({
+        currentProfileId: account.profileId,
+      });
+
+      saveStateSpy.mockRestore();
+    });
+  });
+
+  test("fails for keyring-backed active auth during sole active removal", async () => {
+    await withTempHome(async () => {
+      const currentConfigPath = getCodexConfigPath();
+      const account = createAccountRecordFixture("profile-1", "foo@example.com", "acct-1");
+
+      await mkdir(dirname(currentConfigPath), { recursive: true });
+      await writeFile(currentConfigPath, 'cli_auth_credentials_store = "keyring"\n', "utf8");
+      await writeAuthFixture(account.authPath, account.accountId, "token-stored");
+      await stateStore.saveState(createStateFixture(account.profileId, [account]));
+
+      await expect(removeAccount("foo@example.com")).rejects.toBeInstanceOf(UnsupportedCredentialStoreError);
+      await expect(readFile(account.authPath, "utf8")).resolves.toContain("token-stored");
     });
   });
 });

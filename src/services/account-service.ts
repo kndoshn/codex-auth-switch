@@ -18,6 +18,11 @@ import {
   type ActivateAccountOptions,
   type ActivateAccountStage,
 } from "./account-activation.js";
+import {
+  removeStoredAccount,
+  type RemoveAccountOptions,
+  type RemoveAccountStage,
+} from "./account-remove.js";
 
 export async function listAccounts(): Promise<{
   accounts: AccountRecord[];
@@ -61,4 +66,23 @@ export async function activateAccount(email: string, options: ActivateAccountOpt
   return withExclusiveLock("use", async () => activateStoredAccount(normalizedEmail, options));
 }
 
-export type { AddAccountOptions, AddAccountStage, ActivateAccountOptions, ActivateAccountStage };
+export async function removeAccount(email: string, options: RemoveAccountOptions = {}): Promise<AccountRecord> {
+  const normalizedEmail = normalizeEmail(email);
+  logDebug("account.remove.start", "Removing account.", { email: normalizedEmail });
+  const account = await withExclusiveLock("remove", async () => removeStoredAccount(normalizedEmail, options));
+  logDebug("account.remove.success", "Removed account.", {
+    email: account.email,
+    profileId: account.profileId,
+    accountId: account.accountId,
+  });
+  return account;
+}
+
+export type {
+  AddAccountOptions,
+  AddAccountStage,
+  ActivateAccountOptions,
+  ActivateAccountStage,
+  RemoveAccountOptions,
+  RemoveAccountStage,
+};
