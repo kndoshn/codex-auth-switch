@@ -39,7 +39,7 @@ export function formatUsageResults(results: UsageResult[]): string {
 }
 
 export function formatAccountActionResult(
-  title: "Added account" | "Active account",
+  title: "Added account" | "Active account" | "Removed account",
   account: AccountRecord,
 ): string {
   return [title, "", ...formatKeyValueLines([

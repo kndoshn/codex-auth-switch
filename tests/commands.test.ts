@@ -1,23 +1,29 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
+import type { AccountRecord } from "../src/types.js";
+
 const mocks = vi.hoisted(() => ({
   addAccount: vi.fn(),
   activateAccount: vi.fn(),
+  removeAccount: vi.fn(),
   listAccounts: vi.fn(),
   getAccountByEmail: vi.fn(),
   getCurrentAccount: vi.fn(),
   fetchUsage: vi.fn(),
   fetchUsageForAll: vi.fn(),
   select: vi.fn(),
+  confirm: vi.fn(),
 }));
 
 vi.mock("@inquirer/prompts", () => ({
+  confirm: mocks.confirm,
   select: mocks.select,
 }));
 
 vi.mock("../src/services/account-service.js", () => ({
   addAccount: mocks.addAccount,
   activateAccount: mocks.activateAccount,
+  removeAccount: mocks.removeAccount,
   listAccounts: mocks.listAccounts,
   getAccountByEmail: mocks.getAccountByEmail,
   getCurrentAccount: mocks.getCurrentAccount,
@@ -29,6 +35,18 @@ vi.mock("../src/services/usage-service.js", () => ({
 }));
 
 import { runCli } from "../src/cli.js";
+
+function createAccount(overrides: Partial<AccountRecord> = {}): AccountRecord {
+  return {
+    profileId: "profile-1",
+    email: "foo@example.com",
+    accountId: "acct-1",
+    authPath: "/tmp/foo.json",
+    createdAt: "2026-04-04T00:00:00.000Z",
+    lastUsedAt: "2026-04-04T00:00:00.000Z",
+    ...overrides,
+  };
+}
 
 function createBuffer(isTTY = false): {
   isTTY: boolean;
@@ -75,16 +93,7 @@ describe("command execution", () => {
 
   test("ls prints formatted accounts", async () => {
     mocks.listAccounts.mockResolvedValue({
-      accounts: [
-        {
-          profileId: "profile-1",
-          email: "foo@example.com",
-          accountId: "123456789",
-          authPath: "/tmp/foo.json",
-          createdAt: "2026-04-04T00:00:00.000Z",
-          lastUsedAt: "2026-04-04T00:00:00.000Z",
-        },
-      ],
+      accounts: [createAccount({ accountId: "123456789" })],
       currentProfileId: "profile-1",
     });
 
@@ -101,14 +110,7 @@ describe("command execution", () => {
       options?.onStageChange?.("preparing_login");
       options?.onStageChange?.("awaiting_login");
       options?.onStageChange?.("saving_account");
-      return {
-        profileId: "profile-1",
-        email: "foo@example.com",
-        accountId: "acct-1",
-        authPath: "/tmp/foo.json",
-        createdAt: "2026-04-04T00:00:00.000Z",
-        lastUsedAt: "2026-04-04T00:00:00.000Z",
-      };
+      return createAccount();
     });
 
     const { stdout } = captureProcessIo();
@@ -121,14 +123,7 @@ describe("command execution", () => {
   });
 
   test("add accepts a quoted email argument", async () => {
-    mocks.addAccount.mockResolvedValue({
-      profileId: "profile-1",
-      email: "admin@northview.jp",
-      accountId: "acct-1",
-      authPath: "/tmp/foo.json",
-      createdAt: "2026-04-04T00:00:00.000Z",
-      lastUsedAt: "2026-04-04T00:00:00.000Z",
-    });
+    mocks.addAccount.mockResolvedValue(createAccount({ email: "admin@northview.jp" }));
 
     const { stdout } = captureProcessIo();
 
@@ -139,16 +134,7 @@ describe("command execution", () => {
 
   test("use prompts when email is omitted", async () => {
     mocks.listAccounts.mockResolvedValue({
-      accounts: [
-        {
-          profileId: "profile-1",
-          email: "foo@example.com",
-          accountId: "acct-1",
-          authPath: "/tmp/foo.json",
-          createdAt: "2026-04-04T00:00:00.000Z",
-          lastUsedAt: "2026-04-04T00:00:00.000Z",
-        },
-      ],
+      accounts: [createAccount()],
       currentProfileId: null,
     });
     mocks.select.mockResolvedValue("foo@example.com");
@@ -157,14 +143,7 @@ describe("command execution", () => {
       options?.onStageChange?.("loading_account");
       options?.onStageChange?.("writing_auth");
       options?.onStageChange?.("saving_state");
-      return {
-        profileId: "profile-1",
-        email: "foo@example.com",
-        accountId: "acct-1",
-        authPath: "/tmp/foo.json",
-        createdAt: "2026-04-04T00:00:00.000Z",
-        lastUsedAt: "2026-04-04T00:00:00.000Z",
-      };
+      return createAccount();
     });
 
     const { stdout } = captureProcessIo();
@@ -175,6 +154,82 @@ describe("command execution", () => {
     expect(stdout.value).toContain("Active account");
     expect(stdout.value).toContain("Label      : foo@example.com");
     expect(stdout.value).toContain("Account ID : acct-1");
+  });
+
+  test("remove prompts when email is omitted", async () => {
+    mocks.listAccounts.mockResolvedValue({
+      accounts: [createAccount()],
+      currentProfileId: null,
+    });
+    mocks.select.mockResolvedValue("foo@example.com");
+    mocks.confirm.mockResolvedValue(true);
+    mocks.removeAccount.mockImplementation(async (_email, options) => {
+      options?.onStageChange?.("loading_account");
+      options?.onStageChange?.("removing_auth");
+      options?.onStageChange?.("saving_state");
+      return createAccount();
+    });
+
+    const { stdout } = captureProcessIo();
+
+    await runCli(["remove"]);
+    expect(mocks.select).toHaveBeenCalled();
+    expect(mocks.confirm).toHaveBeenCalled();
+    expect(mocks.removeAccount).toHaveBeenCalledWith("foo@example.com", expect.any(Object));
+    expect(stdout.value).toContain("Removed account");
+    expect(stdout.value).toContain("Label      : foo@example.com");
+  });
+
+  test("remove skips confirmation with --yes", async () => {
+    mocks.getAccountByEmail.mockResolvedValue(createAccount());
+    mocks.removeAccount.mockResolvedValue(createAccount());
+
+    const { stdout } = captureProcessIo();
+
+    await runCli(["remove", " Foo@Example.com ", "--yes"]);
+    expect(mocks.getAccountByEmail).toHaveBeenCalledWith("foo@example.com");
+    expect(mocks.confirm).not.toHaveBeenCalled();
+    expect(mocks.removeAccount).toHaveBeenCalledWith("foo@example.com", expect.any(Object));
+    expect(stdout.value).toContain("Removed account");
+  });
+
+  test("remove exits cleanly when confirmation is declined", async () => {
+    mocks.getAccountByEmail.mockResolvedValue(createAccount());
+    mocks.confirm.mockResolvedValue(false);
+
+    const { stdout } = captureProcessIo();
+
+    await runCli(["remove", "foo@example.com"]);
+    expect(mocks.removeAccount).not.toHaveBeenCalled();
+    expect(stdout.value).toContain("Canceled.");
+  });
+
+  test("use reports when no saved accounts are available for interactive selection", async () => {
+    mocks.listAccounts.mockResolvedValue({
+      accounts: [],
+      currentProfileId: null,
+    });
+
+    const { stderr } = captureProcessIo();
+
+    await runCli(["use"]);
+    expect(mocks.select).not.toHaveBeenCalled();
+    expect(stderr.value).toContain("No saved accounts yet.");
+  });
+
+  test("remove reports when the interactive selection becomes stale", async () => {
+    mocks.listAccounts.mockResolvedValue({
+      accounts: [createAccount()],
+      currentProfileId: null,
+    });
+    mocks.select.mockResolvedValue("missing@example.com");
+
+    const { stderr } = captureProcessIo();
+
+    await runCli(["remove"]);
+    expect(mocks.confirm).not.toHaveBeenCalled();
+    expect(mocks.removeAccount).not.toHaveBeenCalled();
+    expect(stderr.value).toContain("No saved accounts yet.");
   });
 
   test("usage rejects email together with --all", async () => {

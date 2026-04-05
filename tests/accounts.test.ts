@@ -2,6 +2,8 @@ import { describe, expect, test } from "vitest";
 
 import {
   assertEmailAvailable,
+  clearCurrentProfile,
+  removeAccountByProfileId,
   requireAccountByEmail,
   requireCurrentAccount,
   setCurrentProfile,
@@ -78,6 +80,26 @@ describe("account helpers", () => {
     expect(requireCurrentAccount(updatedState)).toMatchObject({
       profileId: "bravo",
       email: "bravo@example.com",
+    });
+  });
+
+  test("removes an account and clears the current profile through pure helpers", () => {
+    const alpha = createAccount("alpha", "alpha@example.com");
+    const bravo = createAccount("bravo", "bravo@example.com");
+
+    const state: AppState = {
+      currentProfileId: "bravo",
+      accounts: {
+        alpha,
+        bravo,
+      },
+    };
+
+    const nextState = clearCurrentProfile(removeAccountByProfileId(state, "bravo"));
+
+    expect(nextState.currentProfileId).toBeNull();
+    expect(nextState.accounts).toEqual({
+      alpha,
     });
   });
 });

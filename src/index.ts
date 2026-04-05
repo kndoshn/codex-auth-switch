@@ -8,6 +8,7 @@ try {
 } catch (error) {
   process.exitCode = reportCliFailure({
     stderr: process.stderr,
+    stdout: process.stdout,
     args: process.argv.slice(2),
     source: "bootstrap",
   }, error);

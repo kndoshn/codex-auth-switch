@@ -60,3 +60,20 @@ export function setCurrentProfile(state: AppState, profileId: string): AppState 
     currentProfileId: profileId,
   };
 }
+
+export function removeAccountByProfileId(state: AppState, profileId: string): AppState {
+  const nextAccounts = { ...state.accounts };
+  delete nextAccounts[profileId];
+
+  return {
+    ...state,
+    accounts: nextAccounts,
+  };
+}
+
+export function clearCurrentProfile(state: AppState): AppState {
+  return {
+    ...state,
+    currentProfileId: null,
+  };
+}

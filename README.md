@@ -100,7 +100,36 @@ Active account
   Account ID : 8cd075d2-c767-41da-91d4-09ff5585276d
 ```
 
-### 4. Check usage
+### 4. Remove an account
+
+Interactive:
+
+```bash
+./codex-auth-switch remove
+```
+
+Direct:
+
+```bash
+./codex-auth-switch remove foo@example.com
+```
+
+Skip confirmation:
+
+```bash
+./codex-auth-switch remove foo@example.com --yes
+```
+
+Example output:
+
+```text
+Removed account
+
+  Label      : foo@example.com
+  Account ID : 8cd075d2-c767-41da-91d4-09ff5585276d
+```
+
+### 5. Check usage
 
 Current account:
 
@@ -167,6 +196,17 @@ Switches the active account.
 - Fails if a Codex session appears to be running
 - Syncs the current auth back into managed storage before switching
 
+### `./codex-auth-switch remove [email] [--yes]`
+
+Removes a saved account.
+
+- With no `email`, opens an interactive selector
+- Prompts for confirmation unless `--yes` is provided
+- Removes the managed auth snapshot and the state entry
+- If the target is the sole active account, also removes `$CODEX_HOME/auth.json`
+- Refuses to remove the active account while other saved accounts still exist
+- Fails if a Codex session appears to be running during sole-active removal
+
 ### `./codex-auth-switch usage [email] [--all] [--json]`
 
 Reads usage information.
@@ -218,10 +258,10 @@ MIT
 ## Safety
 
 - Atomic replacement of auth and state files
-- Lock-file based concurrency control for `add` and `use`
+- Lock-file based concurrency control for `add`, `use`, and `remove`
 - `0700` for directories, `0600` for auth files
 - No logging of tokens or raw auth payloads
-- Rollback on failed switch when possible
+- Rollback on failed switch or removal when possible
 
 > **Risk:** If `~/.config/codex-auth-switch/` is compromised, every saved session is exposed.
 
