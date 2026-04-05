@@ -49,17 +49,137 @@ describe("formatAccountList", () => {
     );
 
     expect(output).toContain("Saved accounts (2)");
-    expect(output).toContain("Active");
-    expect(output).toContain("yes     bar@example.com");
+    expect(output).not.toContain("Active");
+    expect(output).toContain("[Current]");
+    expect(output).toContain("Email");
+    expect(output).toContain("bar@example.com");
     expect(output).toContain("foo@example.com");
     expect(output).toContain("2026-04-04");
     expect(output).toContain("local");
+    expect(output).toContain("Tip: Run `use <email>` to switch accounts.");
+  });
+
+  test("does not mark any account as current when currentProfileId is null", () => {
+    const output = formatAccountList(
+      [
+        {
+          profileId: "profile-1",
+          email: "foo@example.com",
+          accountId: "123456789",
+          authPath: "/tmp/foo.json",
+          createdAt: "2026-04-04T00:00:00.000Z",
+          lastUsedAt: "2026-04-04T00:00:00.000Z",
+        },
+      ],
+      null,
+    );
+
+    expect(output).not.toContain("[Current]");
+    expect(output).toContain("foo@example.com");
   });
 });
 
 describe("formatUsageResults", () => {
   test("returns a fallback message when there are no results", () => {
     expect(formatUsageResults([])).toBe("No usage data.");
+  });
+
+  test("shows email in header for a single result", () => {
+    const output = formatUsageResults([
+      {
+        email: "foo@example.com",
+        ok: true,
+        snapshot: {
+          email: "foo@example.com",
+          observedEmail: null,
+          planType: "pro",
+          primaryWindow: null,
+          secondaryWindow: null,
+          fetchedAt: "2026-04-04T00:00:00.000Z",
+        },
+      },
+    ]);
+
+    expect(output).toContain("Usage — foo@example.com");
+    expect(output).not.toContain("Usage summary");
+    expect(output).toContain("Plan         : Pro");
+  });
+
+  test("appends tip when showTip is true", () => {
+    const output = formatUsageResults(
+      [
+        {
+          email: "foo@example.com",
+          ok: true,
+          snapshot: {
+            email: "foo@example.com",
+            observedEmail: null,
+            planType: "pro",
+            primaryWindow: null,
+            secondaryWindow: null,
+            fetchedAt: "2026-04-04T00:00:00.000Z",
+          },
+        },
+      ],
+      { showTip: true },
+    );
+
+    expect(output).toContain("Tip: Run `usage --all` to see all accounts.");
+  });
+
+  test("does not append tip when showTip is omitted", () => {
+    const output = formatUsageResults([
+      {
+        email: "foo@example.com",
+        ok: true,
+        snapshot: {
+          email: "foo@example.com",
+          observedEmail: null,
+          planType: "pro",
+          primaryWindow: null,
+          secondaryWindow: null,
+          fetchedAt: "2026-04-04T00:00:00.000Z",
+        },
+      },
+    ]);
+
+    expect(output).not.toContain("Tip:");
+  });
+
+  test("marks the current account with a marker when currentEmail is set", () => {
+    const output = formatUsageResults(
+      [
+        {
+          email: "foo@example.com",
+          ok: true,
+          snapshot: {
+            email: "foo@example.com",
+            observedEmail: null,
+            planType: "pro",
+            primaryWindow: null,
+            secondaryWindow: null,
+            fetchedAt: "2026-04-04T00:00:00.000Z",
+          },
+        },
+        {
+          email: "bar@example.com",
+          ok: true,
+          snapshot: {
+            email: "bar@example.com",
+            observedEmail: null,
+            planType: "plus",
+            primaryWindow: null,
+            secondaryWindow: null,
+            fetchedAt: "2026-04-04T00:00:00.000Z",
+          },
+        },
+      ],
+      { currentEmail: "foo@example.com" },
+    );
+
+    expect(output).toContain("▶ foo@example.com (Current)");
+    expect(output).not.toContain("▶ bar@example.com");
+    expect(output).toContain("bar@example.com");
   });
 
   test("formats successful and failed results", () => {
@@ -97,7 +217,9 @@ describe("formatUsageResults", () => {
 
     expect(output).toContain("Usage summary (2 accounts)");
     expect(output).toContain("foo@example.com");
-    expect(output).toContain("Plan           : pro");
+    expect(output).not.toContain("Status : ok");
+    expect(output).not.toContain("Fetched");
+    expect(output).toContain("Plan           : Pro");
     expect(output).toContain("Observed email : admin@northview.jp");
     expect(output).toContain(
       `5h limit       : 58% left (resets ${formatExpectedReset(primaryResetAt, fetchedAt)})`,
@@ -105,9 +227,6 @@ describe("formatUsageResults", () => {
     expect(output).toContain(
       `Weekly limit   : 92% left (resets ${formatExpectedReset(secondaryResetAt, fetchedAt)})`,
     );
-    expect(output).toContain("Fetched        :");
-    expect(output).not.toContain(`Fetched        : ${fetchedAt}`);
-    expect(output).toContain("local");
     expect(output).toContain("bar@example.com");
     expect(output).toContain("Code   : unauthorized");
     expect(output).toContain("Detail : denied");
@@ -126,7 +245,7 @@ describe("formatAccountActionResult", () => {
     });
 
     expect(output).toContain("Removed account");
-    expect(output).toContain("Label      : foo@example.com");
+    expect(output).toContain("Email      : foo@example.com");
     expect(output).toContain("Account ID : acct-1");
   });
 });

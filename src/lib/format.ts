@@ -12,30 +12,44 @@ export function formatAccountList(
   }
 
   const rows = accounts.map((account) => [
-    account.profileId === currentProfileId ? "yes" : "",
+    account.profileId === currentProfileId ? "[Current]" : "",
     account.email,
     account.accountId,
     formatLocalTimestamp(account.lastUsedAt),
   ]);
 
-  return [`Saved accounts (${accounts.length})`, "", formatTable([
-    "Active",
-    "Label",
-    "Account ID",
-    "Last used",
-  ], rows)].join("\n");
+  return [
+    `Saved accounts (${accounts.length})`,
+    "",
+    formatTable(["", "Email", "Account ID", "Last used"], rows),
+    "",
+    "Tip: Run `use <email>` to switch accounts.",
+  ].join("\n");
 }
 
-export function formatUsageResults(results: UsageResult[]): string {
+export function formatUsageResults(
+  results: UsageResult[],
+  options?: { currentEmail?: string; showTip?: boolean },
+): string {
   if (results.length === 0) {
     return "No usage data.";
   }
 
+  const currentEmail = options?.currentEmail ?? null;
   const header = results.length === 1
-    ? "Usage"
+    ? `Usage — ${results[0].email}`
     : `Usage summary (${results.length} accounts)`;
 
-  return [header, "", results.map(formatUsageBlock).join("\n\n")].join("\n");
+  const blocks = results.map((r) =>
+    formatUsageBlock(r, r.email === currentEmail),
+  );
+  const lines = [header, "", blocks.join("\n\n")];
+
+  if (options?.showTip) {
+    lines.push("", "Tip: Run `usage --all` to see all accounts.");
+  }
+
+  return lines.join("\n");
 }
 
 export function formatAccountActionResult(
@@ -43,15 +57,17 @@ export function formatAccountActionResult(
   account: AccountRecord,
 ): string {
   return [title, "", ...formatKeyValueLines([
-    ["Label", account.email],
+    ["Email", account.email],
     ["Account ID", account.accountId],
   ])].join("\n");
 }
 
-function formatUsageBlock(result: UsageResult): string {
+function formatUsageBlock(result: UsageResult, isCurrent: boolean): string {
+  const emailLine = isCurrent ? `▶ ${result.email} (Current)` : result.email;
+
   if (!result.ok) {
     return [
-      result.email,
+      emailLine,
       ...formatKeyValueLines([
         ["Status", "error"],
         ["Code", result.code],
@@ -60,21 +76,20 @@ function formatUsageBlock(result: UsageResult): string {
     ].join("\n");
   }
 
+  const { snapshot } = result;
   return [
-    result.email,
+    emailLine,
     ...formatKeyValueLines([
-      ["Status", "ok"],
-      ...formatObservedEmailLines(result.email, result.snapshot.observedEmail),
-      ["Plan", result.snapshot.planType ?? "unknown"],
-      [formatUsageWindowLabel(result.snapshot.primaryWindow, 300), formatUsageWindow(
-        result.snapshot.primaryWindow,
-        result.snapshot.fetchedAt,
+      ...formatObservedEmailLines(result.email, snapshot.observedEmail),
+      ["Plan", capitalizeFirst(snapshot.planType ?? "unknown")],
+      [formatUsageWindowLabel(snapshot.primaryWindow, 300), formatUsageWindow(
+        snapshot.primaryWindow,
+        snapshot.fetchedAt,
       )],
-      [formatUsageWindowLabel(result.snapshot.secondaryWindow, 10_080), formatUsageWindow(
-        result.snapshot.secondaryWindow,
-        result.snapshot.fetchedAt,
+      [formatUsageWindowLabel(snapshot.secondaryWindow, 10_080), formatUsageWindow(
+        snapshot.secondaryWindow,
+        snapshot.fetchedAt,
       )],
-      ["Fetched", formatLocalTimestamp(result.snapshot.fetchedAt)],
     ]),
   ].join("\n");
 }
@@ -84,7 +99,7 @@ function formatUsageWindow(window: UsageWindow | null, anchorTimestamp: string):
     return "n/a";
   }
 
-  if (window.usedPercent !== null && window.usedPercent !== undefined) {
+  if (window.usedPercent != null) {
     const summary = `${formatRemainingPercent(window.usedPercent)}% left`;
     if (window.resetAt) {
       return `${summary} (resets ${formatUsageResetTimestamp(window.resetAt, anchorTimestamp)})`;
@@ -131,21 +146,6 @@ function formatTable(headers: string[], rows: string[][]): string {
 
   const separator = widths.map((width) => "-".repeat(width)).join("  ");
   return [renderRow(headers), separator, ...rows.map(renderRow)].join("\n");
-}
-
-function formatTimestamp(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
-  const hour = String(date.getUTCHours()).padStart(2, "0");
-  const minute = String(date.getUTCMinutes()).padStart(2, "0");
-
-  return `${year}-${month}-${day} ${hour}:${minute} UTC`;
 }
 
 function formatLocalTimestamp(value: string): string {
