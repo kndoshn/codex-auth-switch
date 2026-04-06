@@ -53,10 +53,11 @@ export class UsageCommand extends Command {
       }
 
       const { formatUsageResults } = await import("../lib/format.js");
-      this.context.stdout.write(`${formatUsageResults(results, {
-        currentEmail,
+      const formatOptions = {
         showTip: !this.all && !this.email,
-      })}\n`);
+        ...(currentEmail ? { currentEmail } : {}),
+      };
+      this.context.stdout.write(`${formatUsageResults(results, formatOptions)}\n`);
       return exitCode;
     });
   }

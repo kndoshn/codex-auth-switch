@@ -89,6 +89,18 @@ export async function fetchUsageSnapshot(
     });
   }
 
+  if (snapshot.secondaryWindowIssue === "malformed") {
+    logWarn(
+      "usage.secondary_window.unavailable",
+      "Usage endpoint did not return a usable secondary window for this account.",
+      {
+        email: account.email,
+        profileId: account.profileId,
+        planType: snapshot.planType,
+      },
+    );
+  }
+
   return snapshot;
 }
 

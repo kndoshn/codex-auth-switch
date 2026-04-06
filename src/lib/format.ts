@@ -1,4 +1,8 @@
-import type { AccountRecord, UsageResult, UsageWindow } from "../types.js";
+import type { AccountRecord, UsageResult, UsageWindow, UsageWindowIssueCode } from "../types.js";
+
+const USAGE_METER_WIDTH = 20;
+const USAGE_METER_FILLED = "█";
+const USAGE_METER_EMPTY = "░";
 
 export function formatAccountList(
   accounts: AccountRecord[],
@@ -36,8 +40,9 @@ export function formatUsageResults(
   }
 
   const currentEmail = options?.currentEmail ?? null;
+  const firstResult = results[0];
   const header = results.length === 1
-    ? `Usage — ${results[0].email}`
+    ? `Usage — ${firstResult?.email ?? "unknown"}`
     : `Usage summary (${results.length} accounts)`;
 
   const blocks = results.map((r) =>
@@ -77,30 +82,51 @@ function formatUsageBlock(result: UsageResult, isCurrent: boolean): string {
   }
 
   const { snapshot } = result;
+  const primaryLabel = formatUsageWindowLabel(snapshot.primaryWindow, 300);
+  const secondaryLabel = formatUsageWindowLabel(snapshot.secondaryWindow, 10_080);
+  const shouldShowSecondaryWindow =
+    snapshot.secondaryWindow !== null
+    || snapshot.secondaryWindowIssue === null
+    || secondaryLabel !== primaryLabel;
+
   return [
     emailLine,
     ...formatKeyValueLines([
       ...formatObservedEmailLines(result.email, snapshot.observedEmail),
       ["Plan", capitalizeFirst(snapshot.planType ?? "unknown")],
-      [formatUsageWindowLabel(snapshot.primaryWindow, 300), formatUsageWindow(
+      [primaryLabel, formatUsageWindow(
         snapshot.primaryWindow,
         snapshot.fetchedAt,
       )],
-      [formatUsageWindowLabel(snapshot.secondaryWindow, 10_080), formatUsageWindow(
-        snapshot.secondaryWindow,
-        snapshot.fetchedAt,
-      )],
+      ...(
+        shouldShowSecondaryWindow
+          ? [[secondaryLabel, formatUsageWindow(
+            snapshot.secondaryWindow,
+            snapshot.fetchedAt,
+            snapshot.secondaryWindowIssue,
+          )] as [string, string]]
+          : []
+      ),
     ]),
   ].join("\n");
 }
 
-function formatUsageWindow(window: UsageWindow | null, anchorTimestamp: string): string {
+function formatUsageWindow(
+  window: UsageWindow | null,
+  anchorTimestamp: string,
+  issue: UsageWindowIssueCode | null = null,
+): string {
   if (!window) {
+    if (issue === "malformed") {
+      return "not returned by usage endpoint";
+    }
+
     return "n/a";
   }
 
   if (window.usedPercent != null) {
-    const summary = `${formatRemainingPercent(window.usedPercent)}% left`;
+    const remainingPercent = formatRemainingPercent(window.usedPercent);
+    const summary = `${formatUsageMeter(remainingPercent)} ${remainingPercent}% left`;
     if (window.resetAt) {
       return `${summary} (resets ${formatUsageResetTimestamp(window.resetAt, anchorTimestamp)})`;
     }
@@ -165,6 +191,12 @@ function formatLocalTimestamp(value: string): string {
 
 function formatRemainingPercent(usedPercent: number): number {
   return Math.round(Math.min(100, Math.max(0, 100 - usedPercent)));
+}
+
+function formatUsageMeter(remainingPercent: number): string {
+  const clampedPercent = Math.min(100, Math.max(0, remainingPercent));
+  const filledUnits = Math.round((clampedPercent / 100) * USAGE_METER_WIDTH);
+  return `[${USAGE_METER_FILLED.repeat(filledUnits)}${USAGE_METER_EMPTY.repeat(USAGE_METER_WIDTH - filledUnits)}]`;
 }
 
 function formatUsageResetTimestamp(value: string, anchorTimestamp: string): string {

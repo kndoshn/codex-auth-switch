@@ -95,6 +95,7 @@ describe("formatUsageResults", () => {
           planType: "pro",
           primaryWindow: null,
           secondaryWindow: null,
+          secondaryWindowIssue: null,
           fetchedAt: "2026-04-04T00:00:00.000Z",
         },
       },
@@ -103,6 +104,76 @@ describe("formatUsageResults", () => {
     expect(output).toContain("Usage — foo@example.com");
     expect(output).not.toContain("Usage summary");
     expect(output).toContain("Plan         : Pro");
+  });
+
+  test("renders a usage meter when remaining percentage is available", () => {
+    const output = formatUsageResults([
+      {
+        email: "foo@example.com",
+        ok: true,
+        snapshot: {
+          email: "foo@example.com",
+          observedEmail: null,
+          planType: "pro",
+          primaryWindow: {
+            usedPercent: 8,
+            resetAt: "2026-04-04T16:43:00.000Z",
+            windowMinutes: 300,
+          },
+          secondaryWindow: null,
+          secondaryWindowIssue: null,
+          fetchedAt: "2026-04-04T00:00:00.000Z",
+        },
+      },
+    ]);
+
+    expect(output).toContain("5h limit     : [██████████████████░░] 92% left");
+  });
+
+  test("explains when the secondary usage window is unavailable", () => {
+    const output = formatUsageResults([
+      {
+        email: "foo@example.com",
+        ok: true,
+        snapshot: {
+          email: "foo@example.com",
+          observedEmail: null,
+          planType: "pro",
+          primaryWindow: null,
+          secondaryWindow: null,
+          secondaryWindowIssue: "malformed",
+          fetchedAt: "2026-04-04T00:00:00.000Z",
+        },
+      },
+    ]);
+
+    expect(output).toContain("Weekly limit : not returned by usage endpoint");
+  });
+
+  test("does not duplicate the weekly label when only the primary weekly window is usable", () => {
+    const output = formatUsageResults([
+      {
+        email: "foo@example.com",
+        ok: true,
+        snapshot: {
+          email: "foo@example.com",
+          observedEmail: null,
+          planType: "free",
+          primaryWindow: {
+            usedPercent: 0,
+            resetAt: "2026-04-13T13:29:00.000Z",
+            windowMinutes: 10_080,
+          },
+          secondaryWindow: null,
+          secondaryWindowIssue: "malformed",
+          fetchedAt: "2026-04-06T00:00:00.000Z",
+        },
+      },
+    ]);
+
+    expect(output).toContain("Weekly limit : [████████████████████] 100% left");
+    expect(output.match(/Weekly limit/g)).toHaveLength(1);
+    expect(output).not.toContain("not returned by usage endpoint");
   });
 
   test("appends tip when showTip is true", () => {
@@ -117,6 +188,7 @@ describe("formatUsageResults", () => {
             planType: "pro",
             primaryWindow: null,
             secondaryWindow: null,
+            secondaryWindowIssue: null,
             fetchedAt: "2026-04-04T00:00:00.000Z",
           },
         },
@@ -138,6 +210,7 @@ describe("formatUsageResults", () => {
           planType: "pro",
           primaryWindow: null,
           secondaryWindow: null,
+          secondaryWindowIssue: null,
           fetchedAt: "2026-04-04T00:00:00.000Z",
         },
       },
@@ -158,6 +231,7 @@ describe("formatUsageResults", () => {
             planType: "pro",
             primaryWindow: null,
             secondaryWindow: null,
+            secondaryWindowIssue: null,
             fetchedAt: "2026-04-04T00:00:00.000Z",
           },
         },
@@ -170,6 +244,7 @@ describe("formatUsageResults", () => {
             planType: "plus",
             primaryWindow: null,
             secondaryWindow: null,
+            secondaryWindowIssue: null,
             fetchedAt: "2026-04-04T00:00:00.000Z",
           },
         },
@@ -204,6 +279,7 @@ describe("formatUsageResults", () => {
             resetAt: secondaryResetAt,
             windowMinutes: 10_080,
           },
+          secondaryWindowIssue: null,
           fetchedAt,
         },
       },
@@ -222,10 +298,10 @@ describe("formatUsageResults", () => {
     expect(output).toContain("Plan           : Pro");
     expect(output).toContain("Observed email : admin@northview.jp");
     expect(output).toContain(
-      `5h limit       : 58% left (resets ${formatExpectedReset(primaryResetAt, fetchedAt)})`,
+      `5h limit       : [████████████░░░░░░░░] 58% left (resets ${formatExpectedReset(primaryResetAt, fetchedAt)})`,
     );
     expect(output).toContain(
-      `Weekly limit   : 92% left (resets ${formatExpectedReset(secondaryResetAt, fetchedAt)})`,
+      `Weekly limit   : [██████████████████░░] 92% left (resets ${formatExpectedReset(secondaryResetAt, fetchedAt)})`,
     );
     expect(output).toContain("bar@example.com");
     expect(output).toContain("Code   : unauthorized");

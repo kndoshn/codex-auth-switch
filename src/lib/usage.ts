@@ -18,9 +18,10 @@ export function toUsageSnapshot(raw: unknown, email: string): UsageSnapshot {
     throw new UsageFetchError("malformed_response", "Usage endpoint primary window is malformed.");
   }
 
-  if (rateLimit.secondary_window !== undefined && secondaryWindow === null) {
-    throw new UsageFetchError("malformed_response", "Usage endpoint secondary window is malformed.");
-  }
+  const secondaryWindowIssue =
+    rateLimit.secondary_window !== undefined && secondaryWindow === null
+      ? "malformed"
+      : null;
 
   return {
     email,
@@ -28,6 +29,7 @@ export function toUsageSnapshot(raw: unknown, email: string): UsageSnapshot {
     planType: typeof raw.plan_type === "string" ? raw.plan_type : null,
     primaryWindow,
     secondaryWindow,
+    secondaryWindowIssue,
     fetchedAt: new Date().toISOString(),
   };
 }

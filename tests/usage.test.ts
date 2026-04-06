@@ -34,6 +34,7 @@ describe("usage helpers", () => {
         usedPercent: 11,
         windowMinutes: 10_080,
       },
+      secondaryWindowIssue: null,
     });
   });
 
@@ -71,17 +72,18 @@ describe("usage helpers", () => {
     ).toThrow(UsageFetchError);
   });
 
-  test("throws when secondary_window is present but malformed", () => {
-    expect(() =>
-      toUsageSnapshot({
-        rate_limit: {
-          secondary_window: {
-            used_percent: 10,
-            reset_at: "bad",
-          },
+  test("treats a malformed secondary_window as unavailable", () => {
+    const snapshot = toUsageSnapshot({
+      rate_limit: {
+        secondary_window: {
+          used_percent: 10,
+          reset_at: "bad",
         },
-      }, "foo@example.com"),
-    ).toThrow(UsageFetchError);
+      },
+    }, "foo@example.com");
+
+    expect(snapshot.secondaryWindow).toBeNull();
+    expect(snapshot.secondaryWindowIssue).toBe("malformed");
   });
 
   test("normalizes failures into typed result metadata", () => {
@@ -117,6 +119,7 @@ describe("usage helpers", () => {
           planType: "pro",
           primaryWindow: null,
           secondaryWindow: null,
+          secondaryWindowIssue: null,
           fetchedAt: "2026-04-04T00:00:00.000Z",
         },
       },
