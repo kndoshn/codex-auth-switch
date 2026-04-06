@@ -28,6 +28,9 @@ export type UsageWindow = {
   windowMinutes: number | null;
 };
 
+export type UsageWindowIssueCode =
+  | "malformed";
+
 export type UsageFailureCode =
   | "auth_missing"
   | "auth_invalid"
@@ -49,6 +52,7 @@ export type UsageSnapshot = {
   planType: string | null;
   primaryWindow: UsageWindow | null;
   secondaryWindow: UsageWindow | null;
+  secondaryWindowIssue: UsageWindowIssueCode | null;
   fetchedAt: string;
 };
 

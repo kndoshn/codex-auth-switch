@@ -290,6 +290,7 @@ describe("command execution", () => {
         planType: "pro",
         primaryWindow: null,
         secondaryWindow: null,
+        secondaryWindowIssue: null,
         fetchedAt: "2026-04-04T00:00:00.000Z",
       },
     });
@@ -325,6 +326,7 @@ describe("command execution", () => {
         planType: null,
         primaryWindow: null,
         secondaryWindow: null,
+        secondaryWindowIssue: null,
         fetchedAt: "2026-04-04T00:00:00.000Z",
       },
     });
@@ -384,6 +386,7 @@ describe("command execution", () => {
             planType: "pro",
             primaryWindow: null,
             secondaryWindow: null,
+            secondaryWindowIssue: null,
             fetchedAt: "2026-04-04T00:00:00.000Z",
           },
         },

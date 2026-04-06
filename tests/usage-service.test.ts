@@ -218,6 +218,42 @@ describe("usage service", () => {
         secondaryWindow: {
           usedPercent: 11,
         },
+        secondaryWindowIssue: null,
+      });
+    });
+  });
+
+  test("treats a malformed secondary window as an unavailable weekly limit", async () => {
+    await withTempHome(async () => {
+      const account = createAccount("expired@example.com", "acct-expired");
+      await writeAuthFile(account.authPath, "token-expired", "acct-expired");
+
+      vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+        plan_type: "pro",
+        rate_limit: {
+          primary_window: {
+            used_percent: 24,
+            reset_at: 1_775_300_000,
+          },
+          secondary_window: null,
+        },
+      }), { status: 200 })));
+
+      const result = await fetchUsage(account);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        throw new Error("Expected success result.");
+      }
+
+      expect(result.snapshot).toMatchObject({
+        email: "expired@example.com",
+        planType: "pro",
+        primaryWindow: {
+          usedPercent: 24,
+        },
+        secondaryWindow: null,
+        secondaryWindowIssue: "malformed",
       });
     });
   });
