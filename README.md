@@ -165,8 +165,8 @@ Usage summary (2 accounts)
 ▶ foo@example.com (Current)
   Observed email : admin@northview.jp
   Plan           : Pro
-  5h limit       : 58% left (resets 14:00)
-  Weekly limit   : 90% left (resets 15:00 on 11 Apr)
+  5h limit       : [████████████░░░░░░░░] 58% left (resets 14:00)
+  Weekly limit   : [██████████████████░░] 90% left (resets 15:00 on 11 Apr)
 
 bar@example.com
   Status : error
