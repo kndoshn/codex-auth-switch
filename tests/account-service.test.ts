@@ -439,6 +439,99 @@ describe("activateAccount", () => {
     });
   });
 
+  test("activates a target account when the live auth.json is missing", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const currentAccount = createAccountRecordFixture(
+        "profile-current",
+        "current@example.com",
+        "acct-current",
+      );
+      const targetAccount = createAccountRecordFixture(
+        "profile-target",
+        "target@example.com",
+        "acct-target",
+      );
+
+      await writeAuthFixture(currentAccount.authPath, "acct-current", "token-current-stored");
+      await writeAuthFixture(targetAccount.authPath, "acct-target", "token-target-stored");
+      await stateStore.saveState(
+        createStateFixture(currentAccount.profileId, [currentAccount, targetAccount]),
+      );
+      // Intentionally do NOT create currentAuthPath: simulates Codex Desktop logout.
+
+      await activateAccount("target@example.com");
+
+      await expect(readFile(currentAuthPath, "utf8")).resolves.toContain("token-target-stored");
+      await expect(stateStore.loadState()).resolves.toMatchObject({
+        currentProfileId: targetAccount.profileId,
+      });
+      // The previous account's managed snapshot must be untouched.
+      await expect(readFile(currentAccount.authPath, "utf8")).resolves.toContain(
+        "token-current-stored",
+      );
+    });
+  });
+
+  test("still throws when the live auth.json exists but is malformed", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const currentAccount = createAccountRecordFixture(
+        "profile-current",
+        "current@example.com",
+        "acct-current",
+      );
+      const targetAccount = createAccountRecordFixture(
+        "profile-target",
+        "target@example.com",
+        "acct-target",
+      );
+
+      await writeAuthFixture(currentAccount.authPath, "acct-current", "token-current-stored");
+      await writeAuthFixture(targetAccount.authPath, "acct-target", "token-target-stored");
+      await stateStore.saveState(
+        createStateFixture(currentAccount.profileId, [currentAccount, targetAccount]),
+      );
+      await mkdir(dirname(currentAuthPath), { recursive: true });
+      await writeFile(currentAuthPath, "not-json", "utf8");
+
+      await expect(activateAccount("target@example.com")).rejects.toBeInstanceOf(AuthReadError);
+    });
+  });
+
+  test("rolls back without leaving an auth.json when starting state had none", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const currentAccount = createAccountRecordFixture(
+        "profile-current",
+        "current@example.com",
+        "acct-current",
+      );
+      const targetAccount = createAccountRecordFixture(
+        "profile-target",
+        "target@example.com",
+        "acct-target",
+      );
+
+      await writeAuthFixture(currentAccount.authPath, "acct-current", "token-current-stored");
+      await writeAuthFixture(targetAccount.authPath, "acct-target", "token-target-stored");
+      await stateStore.saveState(
+        createStateFixture(currentAccount.profileId, [currentAccount, targetAccount]),
+      );
+
+      const saveStateSpy = vi
+        .spyOn(stateStore, "saveState")
+        .mockRejectedValueOnce(new Error("disk full"));
+
+      await expect(activateAccount("target@example.com")).rejects.toThrow("disk full");
+      await expect(readFile(currentAuthPath, "utf8")).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+
+      saveStateSpy.mockRestore();
+    });
+  });
+
   test("removes the written auth file when state persistence fails during activation with no previous auth", async () => {
     await withTempHome(async () => {
       const accountAuthPath = getAccountAuthPath("profile_1");

@@ -44,7 +44,24 @@ export async function activateStoredAccount(
     );
   }
   const currentAuthPath = activeAuthSource.authPath;
-  const syncResult = await syncCurrentActiveAccountSnapshot(state, currentAuthPath);
+  // Probe before syncing: if state still records a current profile but the
+  // live auth.json is gone (e.g., the user ran Logout in the Codex Desktop
+  // app), there is nothing to snapshot back into managed storage. Skip the
+  // sync helper entirely so its strict invariants stay intact. Doing the
+  // existence check up front also keeps "missing" cleanly separated from
+  // "malformed", since readAuthFile wraps ENOENT in the same AuthReadError it
+  // uses for invalid JSON.
+  let syncResult: { state: AppState; previousAuth: string | null };
+  if (state.currentProfileId !== null && (await readFileIfExists(currentAuthPath)) === null) {
+    logWarn(
+      "account.sync_current.skip_missing_auth",
+      "Live auth.json is missing while state has a current profile. Skipping sync.",
+      { currentProfileId: state.currentProfileId, currentAuthPath },
+    );
+    syncResult = { state, previousAuth: null };
+  } else {
+    syncResult = await syncCurrentActiveAccountSnapshot(state, currentAuthPath);
+  }
   const stateWithSyncedCurrent = syncResult.state;
   const account = requireAccountByEmail(stateWithSyncedCurrent, email);
   const targetAuthPath = await ensureManagedAuthFilePermissions(account.profileId);

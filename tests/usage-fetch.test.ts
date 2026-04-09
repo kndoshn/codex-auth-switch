@@ -5,9 +5,13 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { AccountRecord } from "../src/types.js";
 import { getAccountAuthPath } from "../src/lib/paths.js";
-import { UsageFetchError } from "../src/lib/errors.js";
-import { getCodexAuthPath } from "../src/lib/paths.js";
-import { resolveUsageAuthPath, requestUsagePayload } from "../src/services/usage-fetch.js";
+import { UnsupportedCredentialStoreError, UsageFetchError } from "../src/lib/errors.js";
+import { getCodexAuthPath, getCodexConfigPath } from "../src/lib/paths.js";
+import {
+  createUsageFetchContext,
+  resolveUsageAuthPath,
+  requestUsagePayload,
+} from "../src/services/usage-fetch.js";
 import { saveState } from "../src/state/store.js";
 import { withTempHome } from "./helpers/home.js";
 
@@ -68,6 +72,67 @@ describe("usage-fetch helpers", () => {
       }), "utf8");
 
       await expect(resolveUsageAuthPath(currentAccount)).resolves.toBe(getCodexAuthPath());
+    });
+  });
+
+  test("createUsageFetchContext returns null activeAuthPath when auth.json is missing in auto mode", async () => {
+    await withTempHome(async () => {
+      const currentAccount = {
+        ...createAccount("current@example.com", "profile-current", "acct-current"),
+        profileId: "profile-current",
+      };
+
+      await saveState({
+        currentProfileId: "profile-current",
+        accounts: { "profile-current": currentAccount },
+      });
+
+      // No config.toml, no live auth.json: simulates Codex Desktop logout in
+      // the default "auto" credential store mode.
+      await expect(createUsageFetchContext(currentAccount)).resolves.toEqual({
+        currentProfileId: "profile-current",
+        activeAuthPath: null,
+      });
+    });
+  });
+
+  test("createUsageFetchContext throws when config selects keyring storage", async () => {
+    await withTempHome(async () => {
+      const currentAccount = {
+        ...createAccount("current@example.com", "profile-current", "acct-current"),
+        profileId: "profile-current",
+      };
+
+      await saveState({
+        currentProfileId: "profile-current",
+        accounts: { "profile-current": currentAccount },
+      });
+
+      const configPath = getCodexConfigPath();
+      await mkdir(dirname(configPath), { recursive: true });
+      await writeFile(configPath, 'cli_auth_credentials_store = "keyring"\n', "utf8");
+
+      await expect(createUsageFetchContext(currentAccount)).rejects.toBeInstanceOf(
+        UnsupportedCredentialStoreError,
+      );
+    });
+  });
+
+  test("resolveUsageAuthPath falls back to managed path when live auth.json is missing", async () => {
+    await withTempHome(async () => {
+      const currentAccount = {
+        ...createAccount("current@example.com", "profile-current", "acct-current"),
+        profileId: "profile-current",
+      };
+
+      await saveState({
+        currentProfileId: "profile-current",
+        accounts: { "profile-current": currentAccount },
+      });
+
+      // No live auth.json on disk: resolveUsageAuthPath should degrade to the
+      // managed snapshot path so usage queries can still serve the account.
+      await expect(resolveUsageAuthPath(currentAccount)).resolves.toBe(currentAccount.authPath);
     });
   });
 

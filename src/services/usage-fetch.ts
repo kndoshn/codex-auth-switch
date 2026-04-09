@@ -1,7 +1,7 @@
 import type { AccountRecord, UsageResult, UsageSnapshot } from "../types.js";
 import { deriveManagedAuthPath } from "../lib/account-record.js";
 import { readAuthFile } from "../lib/auth.js";
-import { requireFileBasedCodexAuthSource } from "../lib/codex-auth-source.js";
+import { resolveCodexAuthSource } from "../lib/codex-auth-source.js";
 import { UnsupportedCredentialStoreError, UsageAuthError, UsageFetchError } from "../lib/errors.js";
 import { ensureFileModeIfExists } from "../lib/fs.js";
 import { logDebug, logWarn } from "../lib/log.js";
@@ -168,10 +168,19 @@ export async function createUsageFetchContext(
     };
   }
 
-  const authSource = await requireFileBasedCodexAuthSource(getActiveCodexHome());
+  const authSource = await resolveCodexAuthSource(getActiveCodexHome());
+  if (authSource.resolvedMode === "keyring") {
+    throw new UnsupportedCredentialStoreError(
+      `Codex is configured to use ${authSource.configuredMode} credential storage in ${authSource.homeDir}.`,
+    );
+  }
+
+  // resolvedMode === "unresolved" means auto mode and live auth.json is missing
+  // (e.g., the user ran Logout in Codex Desktop). Fall back to managed
+  // snapshots so usage queries can still serve every saved account.
   return {
     currentProfileId: state.currentProfileId,
-    activeAuthPath: authSource.authPath,
+    activeAuthPath: authSource.resolvedMode === "file" ? authSource.authPath : null,
   };
 }
 
