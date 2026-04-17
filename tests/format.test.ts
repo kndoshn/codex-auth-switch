@@ -150,6 +150,26 @@ describe("formatUsageResults", () => {
     expect(output).toContain("Weekly limit : not returned by usage endpoint");
   });
 
+  test("renders n/a when no usage windows are available", () => {
+    const output = formatUsageResults([
+      {
+        email: "foo@example.com",
+        ok: true,
+        snapshot: {
+          email: "foo@example.com",
+          observedEmail: null,
+          planType: "pro",
+          primaryWindow: null,
+          secondaryWindow: null,
+          secondaryWindowIssue: "unknown" as never,
+          fetchedAt: "2026-04-04T00:00:00.000Z",
+        },
+      },
+    ]);
+
+    expect(output).toContain("5h limit     : n/a");
+  });
+
   test("does not duplicate the weekly label when only the primary weekly window is usable", () => {
     const output = formatUsageResults([
       {
@@ -174,6 +194,99 @@ describe("formatUsageResults", () => {
     expect(output).toContain("Weekly limit : [████████████████████] 100% left");
     expect(output.match(/Weekly limit/g)).toHaveLength(1);
     expect(output).not.toContain("not returned by usage endpoint");
+  });
+
+  test("renders annual labels for very long windows", () => {
+    const output = formatUsageResults([
+      {
+        email: "foo@example.com",
+        ok: true,
+        snapshot: {
+          email: "foo@example.com",
+          observedEmail: null,
+          planType: "enterprise",
+          primaryWindow: {
+            usedPercent: null,
+            resetAt: "2027-04-04T00:00:00.000Z",
+            windowMinutes: 60 * 24 * 365,
+          },
+          secondaryWindow: null,
+          secondaryWindowIssue: null,
+          fetchedAt: "2026-04-04T00:00:00.000Z",
+        },
+      },
+    ]);
+
+    expect(output).toContain("Annual limit : resets ");
+    expect(output).toContain(" on 4 Apr");
+  });
+
+  test("keeps an empty plan label unchanged", () => {
+    const output = formatUsageResults([
+      {
+        email: "foo@example.com",
+        ok: true,
+        snapshot: {
+          email: "foo@example.com",
+          observedEmail: null,
+          planType: "",
+          primaryWindow: null,
+          secondaryWindow: null,
+          secondaryWindowIssue: null,
+          fetchedAt: "2026-04-04T00:00:00.000Z",
+        },
+      },
+    ]);
+
+    expect(output).toContain("Plan         : ");
+  });
+
+  test("falls back to the raw reset timestamp when the anchor is invalid", () => {
+    const output = formatUsageResults([
+      {
+        email: "foo@example.com",
+        ok: true,
+        snapshot: {
+          email: "foo@example.com",
+          observedEmail: null,
+          planType: "pro",
+          primaryWindow: {
+            usedPercent: null,
+            resetAt: "2026-04-05T09:30:00.000Z",
+            windowMinutes: 300,
+          },
+          secondaryWindow: null,
+          secondaryWindowIssue: null,
+          fetchedAt: "not-a-date",
+        },
+      },
+    ]);
+
+    expect(output).toContain("5h limit     : resets 2026-04-05T09:30:00.000Z");
+  });
+
+  test("shows monthly labels for month-sized windows", () => {
+    const output = formatUsageResults([
+      {
+        email: "foo@example.com",
+        ok: true,
+        snapshot: {
+          email: "foo@example.com",
+          observedEmail: null,
+          planType: "pro",
+          primaryWindow: {
+            usedPercent: 50,
+            resetAt: "2026-05-01T00:00:00.000Z",
+            windowMinutes: 60 * 24 * 30,
+          },
+          secondaryWindow: null,
+          secondaryWindowIssue: null,
+          fetchedAt: "2026-04-04T00:00:00.000Z",
+        },
+      },
+    ]);
+
+    expect(output).toContain("Monthly limit : [██████████░░░░░░░░░░] 50% left");
   });
 
   test("appends tip when showTip is true", () => {

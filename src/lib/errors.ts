@@ -134,20 +134,31 @@ export class CodexProcessRunningError extends CodexAuthSwitchError {
     message: string,
     options?: ErrorOptions & { detectedProcesses?: Array<{ pid: number; command: string }> },
   ) {
-    const processes = options?.detectedProcesses ?? [];
-    const lines = [
-      "Cannot switch while Codex appears to be running.",
-      "",
-      ...formatDetectedProcesses(processes),
-      "Close these sessions first, then retry.",
-      "If you are running codex-auth-switch inside Codex, run it from another shell.",
-    ];
     super(message, {
       ...options,
       exitCode: 1,
-      displayMessage: lines.join("\n"),
+      displayMessage: formatCodexProcessRunningDisplayMessage(options?.detectedProcesses ?? []),
     });
   }
+}
+
+function formatCodexProcessRunningDisplayMessage(
+  processes: Array<{ pid: number; command: string }>,
+): string {
+  const lines = [
+    "",
+    "==================== ERROR ====================",
+    "Codex is still running, so the account cannot be switched.",
+    "",
+    ...formatDetectedProcesses(processes),
+    "Next steps:",
+    "  1. Close these sessions.",
+    "  2. Retry the command.",
+    "  3. If you are running codex-auth-switch inside Codex, run it from another shell.",
+    "================================================",
+  ];
+
+  return lines.join("\n");
 }
 
 function formatDetectedProcesses(
@@ -160,7 +171,7 @@ function formatDetectedProcesses(
   const truncate = (s: string, max: number) => (s.length > max ? `${s.slice(0, max)}…` : s);
   return [
     "Detected processes:",
-    ...processes.map((p) => `  PID ${p.pid}: ${truncate(p.command, 80)}`),
+    ...processes.map((p) => `  - PID ${p.pid}: ${truncate(p.command, 80)}`),
     "",
   ];
 }
