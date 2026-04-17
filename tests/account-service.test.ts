@@ -730,4 +730,52 @@ describe("removeAccount", () => {
       await expect(readFile(account.authPath, "utf8")).resolves.toContain("token-stored");
     });
   });
+
+  test("fails for unresolved active auth during sole active removal", async () => {
+    await withTempHome(async () => {
+      const account = createAccountRecordFixture("profile-1", "foo@example.com", "acct-1");
+
+      await writeAuthFixture(account.authPath, account.accountId, "token-stored");
+      await stateStore.saveState(createStateFixture(account.profileId, [account]));
+
+      await expect(removeAccount("foo@example.com")).rejects.toBeInstanceOf(UnsupportedCredentialStoreError);
+      await expect(readFile(account.authPath, "utf8")).resolves.toContain("token-stored");
+    });
+  });
+
+  test("wraps inactive auth snapshot read failures", async () => {
+    await withTempHome(async () => {
+      const currentAccount = createAccountRecordFixture("profile-current", "current@example.com", "acct-current");
+      const targetAccount = createAccountRecordFixture("profile-target", "target@example.com", "acct-target");
+
+      await writeAuthFixture(currentAccount.authPath, currentAccount.accountId, "token-current-stored");
+      await mkdir(targetAccount.authPath, { recursive: true });
+      await stateStore.saveState(createStateFixture(currentAccount.profileId, [currentAccount, targetAccount]));
+
+      await expect(removeAccount("target@example.com")).rejects.toBeInstanceOf(AuthReadError);
+    });
+  });
+
+  test("rolls back sole active removal without recreating a missing managed snapshot", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const account = createAccountRecordFixture("profile-1", "foo@example.com", "acct-1");
+      const activeRaw = createAuthRaw(account.accountId, "token-active");
+
+      await writeFileCredentialStoreConfig();
+      await writeAuthFixture(currentAuthPath, account.accountId, "token-active");
+      await stateStore.saveState(createStateFixture(account.profileId, [account]));
+
+      const saveStateSpy = vi.spyOn(stateStore, "saveState").mockRejectedValueOnce(new Error("disk full"));
+
+      await expect(removeAccount("foo@example.com")).rejects.toThrow("disk full");
+
+      await expect(readFile(account.authPath, "utf8")).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+      await expect(readFile(currentAuthPath, "utf8")).resolves.toBe(activeRaw);
+
+      saveStateSpy.mockRestore();
+    });
+  });
 });

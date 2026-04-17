@@ -14,6 +14,7 @@ import {
 } from "../src/lib/process.js";
 import {
   CodexProcessRunningError,
+  NotImplementedError,
   ProcessInspectionError,
 } from "../src/lib/errors.js";
 
@@ -69,9 +70,24 @@ describe("process helpers", () => {
     } catch (error) {
       expect(error).toBeInstanceOf(CodexProcessRunningError);
       const err = error as CodexProcessRunningError;
+      expect(err.displayMessage).toContain("==================== ERROR ====================");
+      expect(err.displayMessage).toContain("Next steps:");
       expect(err.displayMessage).toContain("PID 999");
       expect(err.displayMessage).toContain("Codex.app");
     }
+  });
+
+  test("error displayMessage remains well-formed without detected process details", () => {
+    const error = new CodexProcessRunningError("running");
+    expect(error.displayMessage).toContain("==================== ERROR ====================");
+    expect(error.displayMessage).not.toContain("Detected processes:");
+    expect(error.displayMessage).toContain("Retry the command.");
+  });
+
+  test("not implemented errors use the shared user-facing message", () => {
+    const error = new NotImplementedError("todo");
+    expect(error.exitCode).toBe(2);
+    expect(error.displayMessage).toBe("This feature is not implemented yet.");
   });
 
   test("wraps ps inspection failures in a typed error", async () => {

@@ -9,11 +9,13 @@ export async function readAuthFile(path: string): Promise<StoredAuthFile> {
   logDebug("auth.read.start", "Reading auth file.", { path });
   try {
     const raw = await requireAuthRaw(path);
-    const tokens = extractAuthTokens(raw);
+    const metadata = extractAuthMetadata(raw);
     const auth = {
       raw,
-      accountId: tokens.accountId,
-      accessToken: tokens.accessToken,
+      accountId: metadata.accountId,
+      accessToken: metadata.accessToken,
+      refreshToken: metadata.refreshToken,
+      lastRefresh: metadata.lastRefresh,
     };
     logDebug("auth.read.success", "Read auth file.", { path, accountId: auth.accountId });
     return auth;
@@ -85,19 +87,63 @@ export function extractAccessToken(raw: string): string {
   return extractAuthTokens(raw).accessToken;
 }
 
+export function updateAuthFileTokens(
+  raw: string,
+  tokens: {
+    accessToken?: string;
+    refreshToken?: string;
+    idToken?: string;
+    lastRefresh?: string;
+  },
+): string {
+  const document = parseAuthDocument(raw);
+  const authTokens = document.tokens;
+
+  if (tokens.accessToken !== undefined) {
+    authTokens.access_token = tokens.accessToken;
+  }
+
+  if (tokens.refreshToken !== undefined) {
+    authTokens.refresh_token = tokens.refreshToken;
+  }
+
+  if (tokens.idToken !== undefined) {
+    authTokens.id_token = tokens.idToken;
+  }
+
+  if (tokens.lastRefresh !== undefined) {
+    document.root.last_refresh = tokens.lastRefresh;
+  }
+
+  return JSON.stringify(document.root, null, 2);
+}
+
 function extractAuthTokens(raw: string): { accountId: string; accessToken: string } {
+  const metadata = extractAuthMetadata(raw);
   return {
-    accountId: extractRequiredTokenString(raw, "account_id", "account_id"),
-    accessToken: extractRequiredTokenString(raw, "access_token", "access token"),
+    accountId: metadata.accountId,
+    accessToken: metadata.accessToken,
+  };
+}
+
+function extractAuthMetadata(
+  raw: string,
+): { accountId: string; accessToken: string; refreshToken: string | null; lastRefresh: string | null } {
+  const document = parseAuthDocument(raw);
+
+  return {
+    accountId: extractRequiredTokenString(document.tokens, "account_id", "account_id"),
+    accessToken: extractRequiredTokenString(document.tokens, "access_token", "access token"),
+    refreshToken: extractOptionalTokenString(document.tokens, "refresh_token"),
+    lastRefresh: extractOptionalRootString(document.root, "last_refresh"),
   };
 }
 
 function extractRequiredTokenString(
-  raw: string,
+  tokens: Record<string, unknown>,
   tokenKey: "account_id" | "access_token",
   label: string,
 ): string {
-  const tokens = parseAuthTokens(raw);
   const value = tokens[tokenKey];
   if (typeof value !== "string" || value.length === 0) {
     throw new AuthReadError(`Auth file is missing ${label}.`);
@@ -106,7 +152,23 @@ function extractRequiredTokenString(
   return value;
 }
 
-function parseAuthTokens(raw: string): Record<string, unknown> {
+function extractOptionalTokenString(
+  tokens: Record<string, unknown>,
+  tokenKey: "refresh_token",
+): string | null {
+  const value = tokens[tokenKey];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function extractOptionalRootString(
+  root: Record<string, unknown>,
+  key: "last_refresh",
+): string | null {
+  const value = root[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function parseAuthDocument(raw: string): { root: Record<string, unknown>; tokens: Record<string, unknown> } {
   let parsed: unknown;
 
   try {
@@ -124,7 +186,10 @@ function parseAuthTokens(raw: string): Record<string, unknown> {
     throw new AuthReadError("Auth file is missing tokens.");
   }
 
-  return tokens;
+  return {
+    root: parsed,
+    tokens,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -9,6 +9,7 @@ import {
   extractAccountId,
   readAccessTokenFile,
   readAuthFile,
+  updateAuthFileTokens,
   writeAuthFile,
 } from "../src/lib/auth.js";
 import { withTempHome } from "./helpers/home.js";
@@ -70,7 +71,55 @@ describe("auth helpers", () => {
       await expect(readAuthFile(authPath)).resolves.toMatchObject({
         accountId: "acct-456",
         accessToken: "token-456",
+        refreshToken: "refresh-token",
+        lastRefresh: "2026-04-04T10:13:54.567220Z",
       });
+    });
+  });
+
+  test("updates auth token fields without dropping unrelated auth payload fields", () => {
+    const raw = JSON.stringify({
+      auth_mode: "chatgpt",
+      OPENAI_API_KEY: null,
+      last_refresh: "2026-04-04T10:13:54.567220Z",
+      tokens: {
+        id_token: "id-token-old",
+        account_id: "acct-456",
+        access_token: "token-456",
+        refresh_token: "refresh-token-old",
+      },
+      extra_field: "kept",
+    });
+
+    const updated = JSON.parse(updateAuthFileTokens(raw, {
+      accessToken: "token-new",
+      refreshToken: "refresh-token-new",
+      idToken: "id-token-new",
+      lastRefresh: "2026-04-17T00:00:00.000Z",
+    })) as {
+      auth_mode: string;
+      OPENAI_API_KEY: null;
+      last_refresh: string;
+      extra_field: string;
+      tokens: {
+        id_token: string;
+        account_id: string;
+        access_token: string;
+        refresh_token: string;
+      };
+    };
+
+    expect(updated).toEqual({
+      auth_mode: "chatgpt",
+      OPENAI_API_KEY: null,
+      last_refresh: "2026-04-17T00:00:00.000Z",
+      extra_field: "kept",
+      tokens: {
+        id_token: "id-token-new",
+        account_id: "acct-456",
+        access_token: "token-new",
+        refresh_token: "refresh-token-new",
+      },
     });
   });
 

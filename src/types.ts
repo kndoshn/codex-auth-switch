@@ -11,6 +11,8 @@ export type StoredAuthFile = {
   raw: string;
   accountId: string;
   accessToken: string;
+  refreshToken: string | null;
+  lastRefresh: string | null;
 };
 
 export type CodexCredentialStoreMode = "file" | "keyring" | "auto";

@@ -75,6 +75,28 @@ describe("loading indicator", () => {
     expect(stream.output).toBe("");
   });
 
+  test("stays silent when warn-level logging is enabled", () => {
+    vi.stubEnv("CODEX_AUTH_SWITCH_LOG_LEVEL", "warn");
+    const stream = createStream(true);
+    const loading = createLoadingIndicator(stream);
+
+    loading.start("Fetching usage");
+    loading.stop();
+
+    expect(stream.output).toBe("");
+  });
+
+  test("stays silent when info-level logging is enabled", () => {
+    vi.stubEnv("CODEX_AUTH_SWITCH_LOG_LEVEL", "info");
+    const stream = createStream(true);
+    const loading = createLoadingIndicator(stream);
+
+    loading.start("Fetching usage");
+    loading.stop();
+
+    expect(stream.output).toBe("");
+  });
+
   test("disables animation on dumb terminals", () => {
     vi.stubEnv("TERM", "dumb");
     const stream = createStream(true);
@@ -102,6 +124,29 @@ describe("loading indicator", () => {
     expect(stream.output).not.toContain("\x1B[2m");
   });
 
+  test("uses ANSI dim styling for elapsed time when colors are enabled", () => {
+    vi.useFakeTimers();
+    const previousNoColor = process.env.NO_COLOR;
+    delete process.env.NO_COLOR;
+    const stream = createStream(true);
+    const loading = createLoadingIndicator(stream);
+
+    try {
+      loading.start("Fetching usage");
+      vi.advanceTimersByTime(80);
+      loading.stop();
+
+      expect(stream.output).toContain("\x1B[2m");
+      expect(stream.output).toContain("\x1B[22m");
+    } finally {
+      if (previousNoColor === undefined) {
+        delete process.env.NO_COLOR;
+      } else {
+        process.env.NO_COLOR = previousNoColor;
+      }
+    }
+  });
+
   test("does not hide the cursor twice when start is called again while running", () => {
     vi.useFakeTimers();
     const stream = createStream(true);
@@ -126,6 +171,15 @@ describe("loading indicator", () => {
     loading.stop();
 
     expect(stream.output).toContain("1m 1s");
+  });
+
+  test("stopping before the spinner starts produces no output", () => {
+    const stream = createStream(true);
+    const loading = createLoadingIndicator(stream);
+
+    loading.stop();
+
+    expect(stream.output).toBe("");
   });
 });
 

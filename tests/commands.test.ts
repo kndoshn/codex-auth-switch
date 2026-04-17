@@ -166,6 +166,7 @@ describe("command execution", () => {
     mocks.confirm.mockResolvedValue(true);
     mocks.removeAccount.mockImplementation(async (_email, options) => {
       options?.onStageChange?.("loading_account");
+      options?.onStageChange?.("checking_processes");
       options?.onStageChange?.("removing_auth");
       options?.onStageChange?.("saving_state");
       return createAccount();
@@ -410,5 +411,59 @@ describe("command execution", () => {
     expect(stdout.value).toContain("rate_limited");
     expect(stdout.value).toContain("Observed email : real@example.com");
     expect(stdout.value).not.toContain("Tip:");
+  });
+
+  test("usage --all wires progress reporting into fetchUsageForAll", async () => {
+    mocks.listAccounts.mockResolvedValue({
+      accounts: [
+        createAccount(),
+        createAccount({
+          profileId: "profile-2",
+          email: "bar@example.com",
+          accountId: "acct-2",
+          authPath: "/tmp/bar.json",
+        }),
+      ],
+      currentProfileId: null,
+    });
+    mocks.fetchUsageForAll.mockResolvedValue([
+      {
+        email: "foo@example.com",
+        ok: true,
+        snapshot: {
+          email: "foo@example.com",
+          observedEmail: null,
+          planType: "pro",
+          primaryWindow: null,
+          secondaryWindow: null,
+          secondaryWindowIssue: null,
+          fetchedAt: "2026-04-04T00:00:00.000Z",
+        },
+      },
+      {
+        email: "bar@example.com",
+        ok: true,
+        snapshot: {
+          email: "bar@example.com",
+          observedEmail: null,
+          planType: "plus",
+          primaryWindow: null,
+          secondaryWindow: null,
+          secondaryWindowIssue: null,
+          fetchedAt: "2026-04-04T00:00:00.000Z",
+        },
+      },
+    ]);
+
+    captureProcessIo();
+
+    await runCli(["usage", "--all"]);
+
+    expect(mocks.fetchUsageForAll).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({
+        onProgress: expect.any(Function),
+      }),
+    );
   });
 });

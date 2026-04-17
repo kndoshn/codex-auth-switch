@@ -9,6 +9,7 @@ import { UnsupportedCredentialStoreError, UsageFetchError } from "../src/lib/err
 import { getCodexAuthPath, getCodexConfigPath } from "../src/lib/paths.js";
 import {
   createUsageFetchContext,
+  readUsageAccessToken,
   resolveUsageAuthPath,
   requestUsagePayload,
 } from "../src/services/usage-fetch.js";
@@ -141,6 +142,24 @@ describe("usage-fetch helpers", () => {
 
     await expect(requestUsagePayload("token")).rejects.toMatchObject<Partial<UsageFetchError>>({
       code: "unauthorized",
+    });
+  });
+
+  test("reads the access token from the resolved auth state", async () => {
+    await withTempHome(async () => {
+      const account = createAccount("stored@example.com", "profile-stored", "acct-stored");
+      await mkdir(dirname(account.authPath), { recursive: true });
+      await writeFile(account.authPath, JSON.stringify({
+        tokens: {
+          account_id: "acct-stored",
+          access_token: "token-stored",
+        },
+      }), "utf8");
+
+      await expect(readUsageAccessToken(account, {
+        currentProfileId: null,
+        activeAuthPath: null,
+      })).resolves.toBe("token-stored");
     });
   });
 });
