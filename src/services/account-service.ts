@@ -8,6 +8,7 @@ import { logDebug } from "../lib/log.js";
 import { withExclusiveLock } from "../lib/lock.js";
 import type { AccountRecord } from "../types.js";
 import { loadState } from "../state/store.js";
+import { observeAuthFile, type AccountObservation } from "./account-observation.js";
 import {
   addAccountWithLogin,
   type AddAccountOptions,
@@ -27,12 +28,14 @@ import {
 export async function listAccounts(): Promise<{
   accounts: AccountRecord[];
   currentProfileId: string | null;
+  authFile: AccountObservation;
 }> {
   const state = await loadState();
 
   return {
     accounts: sortAccountsByEmail(Object.values(state.accounts)),
     currentProfileId: state.currentProfileId,
+    authFile: await observeAuthFile(),
   };
 }
 

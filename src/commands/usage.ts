@@ -12,9 +12,9 @@ export class UsageCommand extends Command {
 
   static usage = Command.Usage({
     category: "Usage",
-    description: "Show usage for the current account or all saved accounts.",
+    description: "Show usage for the selected account or all saved accounts.",
     examples: [
-      ["Show current account usage", "$0 usage"],
+      ["Show selected account usage", "$0 usage"],
       ["Show one account usage", "$0 usage foo@example.com"],
       ["Show all account usage", "$0 usage --all"],
       ["Show all account usage as JSON", "$0 usage --all --json"],
@@ -41,9 +41,9 @@ export class UsageCommand extends Command {
       }
 
       const loading = createLoadingIndicator(this.context.stderr);
-      const { results, currentEmail } = this.all
+      const { results, selectedEmail } = this.all
         ? await getAllUsage(loading)
-        : { results: [await getSingleUsage(this.email, loading)], currentEmail: undefined };
+        : { results: [await getSingleUsage(this.email, loading)], selectedEmail: undefined };
 
       const exitCode = allUsageResultsFailed(results) ? 3 : 0;
 
@@ -55,7 +55,7 @@ export class UsageCommand extends Command {
       const { formatUsageResults } = await import("../lib/format.js");
       const formatOptions = {
         showTip: !this.all && !this.email,
-        ...(currentEmail ? { currentEmail } : {}),
+        ...(selectedEmail ? { selectedEmail } : {}),
       };
       this.context.stdout.write(`${formatUsageResults(results, formatOptions)}\n`);
       return exitCode;
@@ -80,7 +80,7 @@ async function getSingleUsage(
 
 async function getAllUsage(
   loading: ReturnType<typeof createLoadingIndicator>,
-): Promise<{ results: UsageResult[]; currentEmail: string | undefined }> {
+): Promise<{ results: UsageResult[]; selectedEmail: string | undefined }> {
   const [{ listAccounts }, { fetchUsageForAll }] = await Promise.all([
     import("../services/account-service.js"),
     import("../services/usage-service.js"),
@@ -90,7 +90,7 @@ async function getAllUsage(
     throw new NoAccountsError("No saved accounts are available for usage lookup.");
   }
 
-  const currentEmail = currentProfileId
+  const selectedEmail = currentProfileId
     ? accounts.find((a) => a.profileId === currentProfileId)?.email
     : undefined;
 
@@ -102,7 +102,7 @@ async function getAllUsage(
     })
   );
 
-  return { results, currentEmail };
+  return { results, selectedEmail };
 }
 
 function formatUsageLoading(total: number, completed: number, failed: number): string {

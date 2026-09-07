@@ -17,8 +17,8 @@ export class ListCommand extends Command {
         import("../lib/format.js"),
         import("../services/account-service.js"),
       ]);
-      const { accounts, currentProfileId } = await listAccounts();
-      this.context.stdout.write(`${formatAccountList(accounts, currentProfileId)}\n`);
+      const { accounts, currentProfileId, authFile } = await listAccounts();
+      this.context.stdout.write(`${formatAccountList(accounts, currentProfileId, authFile)}\n`);
       return 0;
     });
   }

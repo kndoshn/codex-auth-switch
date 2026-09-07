@@ -77,15 +77,19 @@ Example:
 ```text
 Saved accounts (2)
 
-           Email            Account ID                            Last used
----------  ---------------  ------------------------------------  --------------------
-[Current]  foo@example.com  8cd075d2-c767-41da-91d4-09ff5585276d  2026-04-04 21:10 local
-           bar@example.com  a1b2c3d4-e5f6-7890-abcd-1234567890ef  2026-04-03 18:00 local
+Status                 Email            Account ID                            Last used
+---------------------  ---------------  ------------------------------------  --------------------
+[Selected] [Auth file]  foo@example.com  8cd075d2-c767-41da-91d4-09ff5585276d  2026-04-04 21:10 local
+                       bar@example.com  a1b2c3d4-e5f6-7890-abcd-1234567890ef  2026-04-03 18:00 local
 
+Selected: last account selected by this tool; not a live Codex status.
+Auth file: account ID observed in $CODEX_HOME/auth.json; running Codex sessions may differ.
 Tip: Run `use <email>` to switch accounts.
 ```
 
-Columns: current marker, email label, `account_id`, and `last_used_at` in local time.
+Columns: status markers, email label, `account_id`, and `last_used_at` in local time.
+
+`[Selected]` comes from this tool's saved selection. `[Auth file]` matches the account ID read from `$CODEX_HOME/auth.json`. An external login can change the file without updating the saved selection; `ls` reports this mismatch without changing credentials or state. Neither marker inspects a running Codex process's cached credentials. With unset, auto, or Keyring storage, the file may not be the credentials Codex uses. The former `[Current]` marker represented only the saved selection and could be misleading.
 
 ### 3. Switch the active account
 
@@ -143,7 +147,7 @@ Removed account
 
 ### 5. Check usage
 
-Current account:
+Account selected in this tool:
 
 ```bash
 ./codex-auth-switch usage
@@ -172,7 +176,7 @@ Example:
 ```text
 Usage summary (2 accounts)
 
-▶ foo@example.com (Current)
+▶ foo@example.com (Selected)
   Observed email : admin@northview.jp
   Plan           : Pro
   5h limit       : [████████████░░░░░░░░] 58% left (resets 14:00)
@@ -224,14 +228,14 @@ Removes a saved account.
 
 Reads usage information.
 
-- No argument: current account
+- No argument: account selected in this tool
 - `email`: specific account
 - `--all`: all saved accounts
 - `--json`: machine-readable output
 
 `--all` continues even when individual accounts fail. If the fetched auth belongs to a different `account_id` than expected, that account is treated as an error (fail-closed).
 
-The current account requires explicit file storage. If its live `auth.json` is missing, usage falls back to the managed snapshot. Invalid or unreadable live auth produces an error. Unsupported active storage produces an error for that account while `--all` continues querying other saved accounts. Listing accounts and removing inactive accounts do not require access to the active Codex auth.
+The selected account requires explicit file storage. If its live `auth.json` is missing, usage falls back to the managed snapshot. Invalid or unreadable live auth produces an error. A live account ID that differs from the selected account produces `auth_mismatch`; usage does not relabel another account's credentials. Unsupported active storage produces an error for that account while `--all` continues querying other saved accounts. `usage --all` marks the saved selection as `(Selected)`. Listing accounts remains available when the auth file is missing or invalid, and removing inactive accounts does not require access to the active Codex auth.
 
 If the upstream response reports a different email than the saved label, the output shows it as `Observed email`.
 

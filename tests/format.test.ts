@@ -50,7 +50,7 @@ describe("formatAccountList", () => {
 
     expect(output).toContain("Saved accounts (2)");
     expect(output).not.toContain("Active");
-    expect(output).toContain("[Current]");
+    expect(output).toContain("[Selected]");
     expect(output).toContain("Email");
     expect(output).toContain("bar@example.com");
     expect(output).toContain("foo@example.com");
@@ -74,7 +74,7 @@ describe("formatAccountList", () => {
       null,
     );
 
-    expect(output).not.toContain("[Current]");
+    expect(output).not.toContain("[Selected]");
     expect(output).toContain("foo@example.com");
   });
 });
@@ -332,7 +332,7 @@ describe("formatUsageResults", () => {
     expect(output).not.toContain("Tip:");
   });
 
-  test("marks the current account with a marker when currentEmail is set", () => {
+  test("marks the current account with a marker when selectedEmail is set", () => {
     const output = formatUsageResults(
       [
         {
@@ -362,10 +362,10 @@ describe("formatUsageResults", () => {
           },
         },
       ],
-      { currentEmail: "foo@example.com" },
+      { selectedEmail: "foo@example.com" },
     );
 
-    expect(output).toContain("▶ foo@example.com (Current)");
+    expect(output).toContain("▶ foo@example.com (Selected)");
     expect(output).not.toContain("▶ bar@example.com");
     expect(output).toContain("bar@example.com");
   });

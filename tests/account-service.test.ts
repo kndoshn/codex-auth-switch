@@ -212,6 +212,7 @@ describe("account queries", () => {
 
       await expect(listAccounts()).resolves.toEqual({
         currentProfileId: "profile-b",
+        authFile: { status: "missing", accountId: null, configuredMode: "file" },
         accounts: [
           expect.objectContaining({ email: "alpha@example.com" }),
           expect.objectContaining({ email: "zeta@example.com" }),

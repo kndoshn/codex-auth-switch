@@ -1,4 +1,5 @@
 import type { AccountRecord, UsageResult, UsageWindow, UsageWindowIssueCode } from "../types.js";
+import type { AccountObservation } from "../services/account-observation.js";
 
 const USAGE_METER_WIDTH = 20;
 const USAGE_METER_FILLED = "█";
@@ -6,7 +7,8 @@ const USAGE_METER_EMPTY = "░";
 
 export function formatAccountList(
   accounts: AccountRecord[],
-  currentProfileId: string | null,
+  selectedProfileId: string | null,
+  authFile?: AccountObservation,
 ): string {
   if (accounts.length === 0) {
     return [
@@ -16,7 +18,10 @@ export function formatAccountList(
   }
 
   const rows = accounts.map((account) => [
-    account.profileId === currentProfileId ? "[Current]" : "",
+    [
+      account.profileId === selectedProfileId ? "[Selected]" : "",
+      authFile?.accountId === account.accountId ? "[Auth file]" : "",
+    ].filter(Boolean).join(" "),
     account.email,
     account.accountId,
     formatLocalTimestamp(account.lastUsedAt),
@@ -25,28 +30,55 @@ export function formatAccountList(
   return [
     `Saved accounts (${accounts.length})`,
     "",
-    formatTable(["", "Email", "Account ID", "Last used"], rows),
+    formatTable(["Status", "Email", "Account ID", "Last used"], rows),
     "",
+    "Selected: last account selected by this tool; not a live Codex status.",
+    ...formatAuthObservation(accounts, selectedProfileId, authFile),
     "Tip: Run `use <email>` to switch accounts.",
   ].join("\n");
 }
 
+function formatAuthObservation(
+  accounts: AccountRecord[],
+  selectedProfileId: string | null,
+  observation?: AccountObservation,
+): string[] {
+  if (!observation) return [];
+  const lines = ["Auth file: account ID observed in $CODEX_HOME/auth.json; running Codex sessions may differ."];
+  if (observation.status !== "available") {
+    lines.push(`Auth file identity is ${observation.status}; no account is marked [Auth file].`);
+  } else {
+    const selected = accounts.find((account) => account.profileId === selectedProfileId);
+    if (selected && selected.accountId !== observation.accountId) {
+      lines.push("Mismatch: the selected account and auth.json belong to different accounts. No files were changed.");
+    }
+    const matches = accounts.filter((account) => account.accountId === observation.accountId);
+    if (matches.length === 0) lines.push(`Auth file account ID ${observation.accountId} is not saved in this tool.`);
+    if (matches.length > 1) lines.push("Multiple saved labels share the auth file account ID; the label cannot be determined uniquely.");
+  }
+  if (observation.configuredMode !== "file") {
+    const mode = observation.configuredMode ?? "unset";
+    lines.push(`Credential storage: ${mode}. The file may not be the credentials Codex uses. Explicit file storage is required for switching.`);
+  }
+  return lines;
+}
+
 export function formatUsageResults(
   results: UsageResult[],
-  options?: { currentEmail?: string; showTip?: boolean },
+  options?: { selectedEmail?: string; showTip?: boolean },
 ): string {
   if (results.length === 0) {
     return "No usage data.";
   }
 
-  const currentEmail = options?.currentEmail ?? null;
+  const selectedEmail = options?.selectedEmail ?? null;
   const firstResult = results[0];
   const header = results.length === 1
     ? `Usage — ${firstResult?.email ?? "unknown"}`
     : `Usage summary (${results.length} accounts)`;
 
   const blocks = results.map((r) =>
-    formatUsageBlock(r, r.email === currentEmail),
+    formatUsageBlock(r, r.email === selectedEmail),
   );
   const lines = [header, "", blocks.join("\n\n")];
 
@@ -67,8 +99,8 @@ export function formatAccountActionResult(
   ])].join("\n");
 }
 
-function formatUsageBlock(result: UsageResult, isCurrent: boolean): string {
-  const emailLine = isCurrent ? `▶ ${result.email} (Current)` : result.email;
+function formatUsageBlock(result: UsageResult, isSelected: boolean): string {
+  const emailLine = isSelected ? `▶ ${result.email} (Selected)` : result.email;
 
   if (!result.ok) {
     return [

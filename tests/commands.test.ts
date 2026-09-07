@@ -101,7 +101,7 @@ describe("command execution", () => {
 
     await runCli(["ls"]);
     expect(stdout.value).toContain("Saved accounts (1)");
-    expect(stdout.value).toContain("[Current]");
+    expect(stdout.value).toContain("[Selected]");
     expect(stdout.value).toContain("foo@example.com");
   });
 
@@ -405,7 +405,7 @@ describe("command execution", () => {
     await runCli(["usage", "--all"]);
 
     expect(stdout.value).toContain("Usage summary (2 accounts)");
-    expect(stdout.value).toContain("▶ foo@example.com (Current)");
+    expect(stdout.value).toContain("▶ foo@example.com (Selected)");
     expect(stdout.value).not.toContain("▶ bar@example.com");
     expect(stdout.value).toContain("bar@example.com");
     expect(stdout.value).toContain("rate_limited");
