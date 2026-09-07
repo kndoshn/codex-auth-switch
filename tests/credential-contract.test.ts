@@ -28,7 +28,7 @@ beforeEach(() => {
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-test.each(['cli_auth_credentials_store = "keyring"', 'cli_auth_credentials_store = "auto"', ''])
+test.each(['cli_auth_credentials_store = "keyring"', 'cli_auth_credentials_store = "auto"'])
 ("rejects first add, use and active removal without file mode: %s", async (config) => {
   await withFileCodexHome(async () => {
     await writeFile(getCodexConfigPath(), config);
@@ -109,7 +109,7 @@ test.each([false, true])("rolls back an auth write that fails after replacing th
   });
 });
 
-test.each(['cli_auth_credentials_store = "keyring"', 'cli_auth_credentials_store = "auto"', '', 'broken = "secret" invalid'])
+test.each(['cli_auth_credentials_store = "keyring"', 'cli_auth_credentials_store = "auto"', 'broken = "secret" invalid'])
 ("usage --all contains active auth errors and still queries inactive accounts: %s", async (config) => {
   await withFileCodexHome(async () => {
     const current = createAccountRecord("a@example.com", snapshot.accountId);

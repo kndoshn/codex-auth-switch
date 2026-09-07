@@ -56,9 +56,9 @@ function formatAuthObservation(
     if (matches.length === 0) lines.push(`Auth file account ID ${observation.accountId} is not saved in this tool.`);
     if (matches.length > 1) lines.push("Multiple saved labels share the auth file account ID; the label cannot be determined uniquely.");
   }
-  if (observation.configuredMode !== "file") {
+  if (observation.configuredMode !== "file" && observation.configuredMode !== null) {
     const mode = observation.configuredMode ?? "unset";
-    lines.push(`Credential storage: ${mode}. The file may not be the credentials Codex uses. Explicit file storage is required for switching.`);
+    lines.push(`Credential storage: ${mode}. The file may not be the credentials Codex uses. File storage is required for switching.`);
   }
   return lines;
 }

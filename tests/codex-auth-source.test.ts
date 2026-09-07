@@ -11,7 +11,7 @@ import {
 import { withTempHome } from "./helpers/home.js";
 
 describe("codex auth source", () => {
-  test("does not infer file mode from a leftover auth.json", async () => {
+  test("uses the Codex file default when the setting is omitted", async () => {
     await withTempHome(async (homeDir) => {
       const authPath = join(homeDir, "auth.json");
       await mkdir(dirname(authPath), { recursive: true });
@@ -24,7 +24,7 @@ describe("codex auth source", () => {
 
       await expect(resolveCodexAuthSource(homeDir)).resolves.toMatchObject({
         configuredMode: null,
-        resolvedMode: "unresolved",
+        resolvedMode: "file",
         authPath,
         homeDir,
       });
@@ -90,6 +90,7 @@ describe("codex auth source", () => {
 
   test("rejects unresolved auto mode when no auth.json exists", async () => {
     await withTempHome(async (homeDir) => {
+      await writeFile(join(homeDir, "config.toml"), 'cli_auth_credentials_store = "auto"\n');
       await expect(requireFileBasedCodexAuthSource(homeDir)).rejects.toBeInstanceOf(
         UnsupportedCredentialStoreError,
       );
@@ -112,7 +113,6 @@ test.each([
 test.each([
   '"cli_auth_credentials_store" = "keyring"\n',
   'cli_auth_credentials_store = "auto"\n',
-  '[features]\ncli_auth_credentials_store = "file"\n',
   'cli_auth_credentials_store = true\n',
   'cli_auth_credentials_store = "file"\ncli_auth_credentials_store = "file"\n',
 ])("rejects unsupported or invalid settings even with leftover auth: %s", async (config) => {
@@ -134,5 +134,12 @@ test.each([
     expect(String(error)).not.toContain("synthetic-secret");
     expect(JSON.stringify(error)).not.toContain("synthetic-secret");
     expect(error).not.toHaveProperty("cause");
+  });
+});
+
+test.each([null, '', '[features]\ncli_auth_credentials_store = "keyring"\n'])("uses default file storage without a top-level setting or auth file: %s", async (config) => {
+  await withTempHome(async (homeDir) => {
+    if (config !== null) await writeFile(join(homeDir, "config.toml"), config);
+    await expect(requireFileBasedCodexAuthSource(homeDir)).resolves.toMatchObject({ configuredMode: null, resolvedMode: "file" });
   });
 });

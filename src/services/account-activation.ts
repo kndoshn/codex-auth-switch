@@ -37,6 +37,7 @@ export async function activateStoredAccount(
 
   options.onStageChange?.("loading_account");
   const state = await loadState();
+  requireAccountByEmail(state, email);
   const activeAuthSource = await requireFileBasedCodexAuthSource(getActiveCodexHome());
   const currentAuthPath = activeAuthSource.authPath;
   // Probe before syncing: if state still records a current profile but the
@@ -65,9 +66,6 @@ export async function activateStoredAccount(
 
   const previousAuth = syncResult.previousAuth ?? await readExistingFile(currentAuthPath);
 
-  options.onStageChange?.("writing_auth");
-  await writeAuthFile(currentAuthPath, targetAuth.raw);
-
   const updatedAccount = touchAccount(account);
   const nextState = setCurrentProfile(
     upsertAccount(stateWithSyncedCurrent, updatedAccount),
@@ -75,6 +73,8 @@ export async function activateStoredAccount(
   );
 
   try {
+    options.onStageChange?.("writing_auth");
+    await writeAuthFile(currentAuthPath, targetAuth.raw);
     options.onStageChange?.("saving_state");
     await saveState(nextState);
   } catch (error) {
@@ -100,12 +100,21 @@ export async function syncCurrentActiveAccountSnapshot(
     };
   }
 
-  const currentAccount = requireCurrentAccount(state);
+  const selectedAccount = requireCurrentAccount(state);
   const activeAuth = await readAuthFile(activeAuthPath);
-  assertStoredAccountConsistency(currentAccount, activeAuth.accountId);
+  const matches = Object.values(state.accounts).filter((account) => account.accountId === activeAuth.accountId);
+  // An external login can change the live identity without updating our selection.
+  // Never copy that identity into the previously selected account's snapshot.
+  const currentAccount = selectedAccount.accountId === activeAuth.accountId
+    ? selectedAccount
+    : matches.length === 1 ? matches[0] : undefined;
+  if (!currentAccount) {
+    throw new AuthReadError("Live auth does not uniquely match a saved account. Cannot safely synchronize before switching.");
+  }
 
   const managedAuthPath = await ensureManagedAuthFilePermissions(currentAccount.profileId);
   const storedAuth = await readAuthFile(managedAuthPath);
+  assertStoredAccountConsistency(currentAccount, storedAuth.accountId);
   if (storedAuth.raw === activeAuth.raw) {
     logDebug("account.sync_current.noop", "Current account auth is already synchronized.", {
       email: currentAccount.email,

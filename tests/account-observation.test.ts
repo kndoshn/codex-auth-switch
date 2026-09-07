@@ -37,7 +37,7 @@ test.each(["file", "auto", "keyring", null])("reports selection/file mismatch wi
     expect(output).toContain("Mismatch:");
     expect(output).not.toContain("[Current]");
     expect(output).not.toContain("synthetic-secret");
-    if (mode !== "file") expect(output).toContain("The file may not be the credentials Codex uses.");
+    if (mode !== "file" && mode !== null) expect(output).toContain("The file may not be the credentials Codex uses.");
     const after = await Promise.all(paths.map(async (path) => ({ raw: await readFile(path, "utf8"), mode: (await stat(path)).mode })));
     expect(after).toEqual(before);
   });

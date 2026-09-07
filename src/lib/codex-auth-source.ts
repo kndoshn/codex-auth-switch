@@ -36,7 +36,8 @@ export async function resolveCodexAuthSource(homeDir: string): Promise<CodexAuth
 
   // A leftover auth.json does not prove that auto selected file storage.
   const resolvedMode: ResolvedCodexCredentialStoreMode =
-    configuredMode === "file" || configuredMode === "keyring" ? configuredMode : "unresolved";
+    configuredMode === null ? "file"
+      : configuredMode === "file" || configuredMode === "keyring" ? configuredMode : "unresolved";
   const source = {
     configuredMode,
     resolvedMode,
@@ -51,7 +52,7 @@ export async function resolveCodexAuthSource(homeDir: string): Promise<CodexAuth
 export async function requireFileBasedCodexAuthSource(homeDir: string): Promise<CodexAuthSourceInfo> {
   const source = await resolveCodexAuthSource(homeDir);
   if (source.resolvedMode !== "file") {
-    throw new UnsupportedCredentialStoreError(`Explicit file credential storage is required in ${source.configPath}.`);
+    throw new UnsupportedCredentialStoreError(`File credential storage is required in ${source.configPath}.`);
   }
   return source;
 }

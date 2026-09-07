@@ -18,7 +18,7 @@ It swaps only the active auth file. Your main Codex history, logs, sessions, and
 
 ## Important Constraints
 
-- **Explicit file-backed auth only.** Set `cli_auth_credentials_store = "file"` at the top level of `$CODEX_HOME/config.toml` (default: `~/.codex/config.toml`). Keyring, `"auto"`, and an omitted setting are not supported for operations that access the active Codex auth. A leftover `auth.json` does not prove that Codex uses file storage.
+- **File-backed auth only.** An omitted `cli_auth_credentials_store` uses Codex’s default file storage. You may also set `cli_auth_credentials_store = "file"` at the top level of `$CODEX_HOME/config.toml` (default: `~/.codex/config.toml`). Explicit Keyring and `"auto"` settings are unsupported; a leftover `auth.json` does not prove that auto selected file storage.
 - **Email is a label.** `add <email>` stores the email as a user-provided label. It is not verified against the browser session used during `codex login`.
 - **Usage is best-effort.** The `usage` command relies on Codex's internal API, which is not a public stable interface and may change without notice.
 
@@ -39,13 +39,13 @@ Verify the build:
 
 ## Quick Start
 
-Before adding your first account, set the following **before any `[table]` headings** in your Codex `config.toml`:
+Codex defaults to file storage when the setting is omitted. To select it explicitly, put the following **before any `[table]` headings** in your Codex `config.toml`:
 
 ```toml
 cli_auth_credentials_store = "file"
 ```
 
-If you previously used `"auto"` or left this setting unset, explicitly select `"file"` before using this version. The tool does not edit your configuration or migrate Keyring credentials. Close Codex before the first account is automatically activated or before switching accounts.
+If you explicitly use `"auto"` or `"keyring"`, select `"file"` before switching. No configuration change is needed when the setting is omitted. The tool does not edit your configuration or migrate Keyring credentials. Close Codex before the first account is automatically activated or before switching accounts.
 
 ### 1. Add an account
 
@@ -89,7 +89,7 @@ Tip: Run `use <email>` to switch accounts.
 
 Columns: status markers, email label, `account_id`, and `last_used_at` in local time.
 
-`[Selected]` comes from this tool's saved selection. `[Auth file]` matches the account ID read from `$CODEX_HOME/auth.json`. An external login can change the file without updating the saved selection; `ls` reports this mismatch without changing credentials or state. Neither marker inspects a running Codex process's cached credentials. With unset, auto, or Keyring storage, the file may not be the credentials Codex uses. The former `[Current]` marker represented only the saved selection and could be misleading.
+`[Selected]` comes from this tool's saved selection. `[Auth file]` matches the account ID read from `$CODEX_HOME/auth.json`. An external login can change the file without updating the saved selection; `ls` reports this mismatch without changing credentials or state. Neither marker inspects a running Codex process's cached credentials. With explicit auto or Keyring storage, the file may not be the credentials Codex uses. The former `[Current]` marker represented only the saved selection and could be misleading.
 
 ### 3. Switch the active account
 
@@ -196,7 +196,7 @@ Starts a temporary `codex login` flow and stores the resulting auth snapshot.
 
 - Rejects duplicate email labels
 - Normalizes the label with `trim + lowercase`
-- Before initial auto-activation, requires explicit file storage and no running Codex process; checks again after login
+- Before initial auto-activation, requires file storage (explicit or the default) and no running Codex process; checks again after login
 - Rolls back auth changes if initial activation or state persistence fails, when restoration is possible
 
 ### `./codex-auth-switch ls`
@@ -210,8 +210,8 @@ Switches the active account.
 - With no `email`, opens an interactive selector
 - With `email`, switches directly
 - Fails if a Codex session appears to be running
-- Requires explicit file storage; can restore a missing live `auth.json` from the saved account
-- Syncs the current auth back into managed storage before switching
+- Requires file storage (explicit or the default); can restore a missing live `auth.json` from the saved account
+- Syncs live auth into the saved account with the same Account ID before switching. If an external login changed the account, the old selection is not used as the destination. Unknown or ambiguous live identities stop the switch.
 
 ### `./codex-auth-switch remove [email] [--yes]`
 
@@ -235,7 +235,7 @@ Reads usage information.
 
 `--all` continues even when individual accounts fail. If the fetched auth belongs to a different `account_id` than expected, that account is treated as an error (fail-closed).
 
-The selected account requires explicit file storage. If its live `auth.json` is missing, usage falls back to the managed snapshot. Invalid or unreadable live auth produces an error. A live account ID that differs from the selected account produces `auth_mismatch`; usage does not relabel another account's credentials. Unsupported active storage produces an error for that account while `--all` continues querying other saved accounts. `usage --all` marks the saved selection as `(Selected)`. Listing accounts remains available when the auth file is missing or invalid, and removing inactive accounts does not require access to the active Codex auth.
+The selected account requires file storage (explicit or the default). If its live `auth.json` is missing, usage falls back to the managed snapshot. Invalid or unreadable live auth produces an error. A live account ID that differs from the selected account produces `auth_mismatch`; usage does not relabel another account's credentials. Unsupported active storage produces an error for that account while `--all` continues querying other saved accounts. `usage --all` marks the saved selection as `(Selected)`. Listing accounts remains available when the auth file is missing or invalid, and removing inactive accounts does not require access to the active Codex auth.
 
 If the upstream response reports a different email than the saved label, the output shows it as `Observed email`.
 
