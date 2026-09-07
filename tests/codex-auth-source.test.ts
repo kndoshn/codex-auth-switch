@@ -11,7 +11,7 @@ import {
 import { withTempHome } from "./helpers/home.js";
 
 describe("codex auth source", () => {
-  test("resolves to file mode when auth.json is readable", async () => {
+  test("does not infer file mode from a leftover auth.json", async () => {
     await withTempHome(async (homeDir) => {
       const authPath = join(homeDir, "auth.json");
       await mkdir(dirname(authPath), { recursive: true });
@@ -23,8 +23,8 @@ describe("codex auth source", () => {
       }), "utf8");
 
       await expect(resolveCodexAuthSource(homeDir)).resolves.toMatchObject({
-        configuredMode: "auto",
-        resolvedMode: "file",
+        configuredMode: null,
+        resolvedMode: "unresolved",
         authPath,
         homeDir,
       });
@@ -94,5 +94,45 @@ describe("codex auth source", () => {
         UnsupportedCredentialStoreError,
       );
     });
+  });
+});
+
+test.each([
+  "cli_auth_credentials_store = 'file'\n",
+  '"cli_auth_credentials_store" = "file" # comment\r\n',
+  "'cli_auth_credentials_store' = 'file'\n[features]\ncli_auth_credentials_store = 'keyring'\n",
+  'description = "# not a comment"\ncli_auth_credentials_store = "file"\n',
+])("accepts supported TOML syntax: %s", async (config) => {
+  await withTempHome(async (homeDir) => {
+    await writeFile(join(homeDir, "config.toml"), config);
+    await expect(requireFileBasedCodexAuthSource(homeDir)).resolves.toMatchObject({ resolvedMode: "file" });
+  });
+});
+
+test.each([
+  '"cli_auth_credentials_store" = "keyring"\n',
+  'cli_auth_credentials_store = "auto"\n',
+  '[features]\ncli_auth_credentials_store = "file"\n',
+  'cli_auth_credentials_store = true\n',
+  'cli_auth_credentials_store = "file"\ncli_auth_credentials_store = "file"\n',
+])("rejects unsupported or invalid settings even with leftover auth: %s", async (config) => {
+  await withTempHome(async (homeDir) => {
+    await writeFile(join(homeDir, "config.toml"), config);
+    await writeFile(join(homeDir, "auth.json"), "{}");
+    await expect(requireFileBasedCodexAuthSource(homeDir)).rejects.toBeInstanceOf(UnsupportedCredentialStoreError);
+  });
+});
+
+test.each([
+  'cli_auth_credentials_store = "synthetic-secret"',
+  'api_key = "synthetic-secret" trailing-invalid-content',
+])("does not expose config content in errors", async (config) => {
+  await withTempHome(async (homeDir) => {
+    await writeFile(join(homeDir, "config.toml"), config);
+    const error = await resolveCodexAuthSource(homeDir).catch((error: Error) => error);
+    expect(error).toBeInstanceOf(UnsupportedCredentialStoreError);
+    expect(String(error)).not.toContain("synthetic-secret");
+    expect(JSON.stringify(error)).not.toContain("synthetic-secret");
+    expect(error).not.toHaveProperty("cause");
   });
 });

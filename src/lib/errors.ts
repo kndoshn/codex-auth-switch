@@ -104,7 +104,7 @@ export class UnsupportedCredentialStoreError extends CodexAuthSwitchError {
       ...options,
       exitCode: 1,
       displayMessage:
-        "This command currently requires file-based Codex auth storage. Set cli_auth_credentials_store = \"file\", or use auto with a readable auth.json.",
+        "This command requires file-based Codex auth storage. Set cli_auth_credentials_store = \"file\" at the top level of $CODEX_HOME/config.toml (default: ~/.codex/config.toml). Keyring, auto, and an omitted setting are not supported.",
     });
   }
 }

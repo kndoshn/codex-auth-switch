@@ -4,7 +4,6 @@ import {
   ActiveAccountRemovalError,
   AuthReadError,
   AuthWriteError,
-  UnsupportedCredentialStoreError,
 } from "../lib/errors.js";
 import {
   clearCurrentProfile,
@@ -13,7 +12,7 @@ import {
 } from "../lib/accounts.js";
 import { assertStoredAccountConsistency } from "../lib/account-record.js";
 import { readAuthFile, writeAuthFile } from "../lib/auth.js";
-import { resolveCodexAuthSource } from "../lib/codex-auth-source.js";
+import { requireFileBasedCodexAuthSource } from "../lib/codex-auth-source.js";
 import { readFileIfExists } from "../lib/fs.js";
 import { logDebug, logWarn } from "../lib/log.js";
 import { ensureManagedStoragePermissions } from "../lib/managed-storage.js";
@@ -89,18 +88,7 @@ async function removeSoleActiveAccount(
   options.onStageChange?.("checking_processes");
   await assertNoRunningCodexProcess();
 
-  const activeAuthSource = await resolveCodexAuthSource(getActiveCodexHome());
-  if (activeAuthSource.resolvedMode === "keyring") {
-    throw new UnsupportedCredentialStoreError(
-      `Codex is configured to use ${activeAuthSource.configuredMode} credential storage in ${activeAuthSource.homeDir}.`,
-    );
-  }
-
-  if (activeAuthSource.resolvedMode !== "file") {
-    throw new UnsupportedCredentialStoreError(
-      `Codex credential storage could not be resolved to file mode in ${activeAuthSource.homeDir}.`,
-    );
-  }
+  const activeAuthSource = await requireFileBasedCodexAuthSource(getActiveCodexHome());
 
   const managedAuthSnapshot = await readExistingFile(account.authPath);
   const activeAuth = await readAuthFile(activeAuthSource.authPath);

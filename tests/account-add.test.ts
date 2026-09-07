@@ -6,7 +6,7 @@ import { describe, expect, test, vi } from "vitest";
 import { getAccountsDir, getCodexAuthPath } from "../src/lib/paths.js";
 import { persistRegisteredAccount } from "../src/services/account-add.js";
 import * as stateStore from "../src/state/store.js";
-import { withTempHome } from "./helpers/home.js";
+import { withFileCodexHome as withTempHome } from "./helpers/home.js";
 
 describe("account-add helpers", () => {
   test("rolls back the managed auth file when state persistence fails", async () => {
@@ -69,3 +69,7 @@ describe("account-add helpers", () => {
     });
   });
 });
+
+vi.mock("../src/lib/process.js", () => ({
+  assertNoRunningCodexProcess: vi.fn(async () => undefined),
+}));

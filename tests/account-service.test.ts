@@ -22,7 +22,7 @@ import {
 import { getAccountAuthPath, getCodexAuthPath, getCodexConfigPath } from "../src/lib/paths.js";
 import * as stateStore from "../src/state/store.js";
 import type { AccountRecord, AppState } from "../src/types.js";
-import { withTempHome } from "./helpers/home.js";
+import { withFileCodexHome as withTempHome } from "./helpers/home.js";
 
 const { execaMock } = vi.hoisted(() => ({
   execaMock: vi.fn(async () => ({
@@ -163,7 +163,7 @@ describe("addAccount", () => {
   test("fails fast when codex does not leave a readable auth file", async () => {
     await withTempHome(async () => {
       await expect(addAccount("foo@example.com")).rejects.toBeInstanceOf(
-        UnsupportedCredentialStoreError,
+        AuthReadError,
       );
     });
   });
@@ -733,6 +733,7 @@ describe("removeAccount", () => {
 
   test("fails for unresolved active auth during sole active removal", async () => {
     await withTempHome(async () => {
+      await writeFile(getCodexConfigPath(), 'cli_auth_credentials_store = "auto"\n');
       const account = createAccountRecordFixture("profile-1", "foo@example.com", "acct-1");
 
       await writeAuthFixture(account.authPath, account.accountId, "token-stored");

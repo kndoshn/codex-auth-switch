@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { getCodexAuthPath } from "../src/lib/paths.js";
-import { withTempHome } from "./helpers/home.js";
+import { withFileCodexHome as withTempHome } from "./helpers/home.js";
 
 type FsPromisesModule = typeof import("node:fs/promises");
 
@@ -194,3 +194,7 @@ async function loadAccountAddModule(options: {
     stateStore,
   };
 }
+
+vi.mock("../src/lib/process.js", () => ({
+  assertNoRunningCodexProcess: vi.fn(async () => undefined),
+}));

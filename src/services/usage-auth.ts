@@ -1,9 +1,9 @@
 import type { AccountRecord, StoredAuthFile } from "../types.js";
 import { deriveManagedAuthPath } from "../lib/account-record.js";
 import { readAuthFile, updateAuthFileTokens, writeAuthFile } from "../lib/auth.js";
-import { resolveCodexAuthSource } from "../lib/codex-auth-source.js";
+import { requireFileBasedCodexAuthSource } from "../lib/codex-auth-source.js";
 import { UnsupportedCredentialStoreError, UsageAuthError, UsageFetchError } from "../lib/errors.js";
-import { ensureFileModeIfExists } from "../lib/fs.js";
+import { ensureFileModeIfExists, readFileIfExists } from "../lib/fs.js";
 import { logDebug, logWarn } from "../lib/log.js";
 import { ensureManagedStoragePermissions } from "../lib/managed-storage.js";
 import { getActiveCodexHome } from "../lib/paths.js";
@@ -16,6 +16,7 @@ const TOKEN_REFRESH_INTERVAL_DAYS = 8;
 export type UsageFetchContext = {
   currentProfileId: string | null;
   activeAuthPath: string | null;
+  activeAuthError?: Error;
 };
 
 export type UsageAuthState = {
@@ -29,6 +30,9 @@ export async function readUsageAuthState(
   context?: UsageFetchContext,
 ): Promise<UsageAuthState> {
   const resolvedContext = context ?? await createUsageFetchContext(account);
+  if (resolvedContext.currentProfileId === account.profileId && resolvedContext.activeAuthError) {
+    throw resolvedContext.activeAuthError;
+  }
   const activeAuthPath = resolvedContext.activeAuthPath;
   const isLiveAuth =
     resolvedContext.currentProfileId === account.profileId
@@ -79,6 +83,9 @@ export async function resolveUsageAuthPath(
   context?: UsageFetchContext,
 ): Promise<string> {
   const resolvedContext = context ?? await createUsageFetchContext(account);
+  if (resolvedContext.currentProfileId === account.profileId && resolvedContext.activeAuthError) {
+    throw resolvedContext.activeAuthError;
+  }
   if (resolvedContext.currentProfileId !== account.profileId || !resolvedContext.activeAuthPath) {
     return deriveManagedAuthPath(account.profileId);
   }
@@ -97,20 +104,24 @@ export async function createUsageFetchContext(
     };
   }
 
-  const authSource = await resolveCodexAuthSource(getActiveCodexHome());
-  if (authSource.resolvedMode === "keyring") {
-    throw new UnsupportedCredentialStoreError(
-      `Codex is configured to use ${authSource.configuredMode} credential storage in ${authSource.homeDir}.`,
-    );
+  try {
+    const authSource = await requireFileBasedCodexAuthSource(getActiveCodexHome());
+    // File mode with missing live auth can use the managed snapshot after logout.
+    const exists = await readFileIfExists(authSource.authPath) !== null;
+    return {
+      currentProfileId: state.currentProfileId,
+      activeAuthPath: exists ? authSource.authPath : null,
+    };
+  } catch (error) {
+    // Keep active-account errors local so usage --all can finish other accounts.
+    return {
+      currentProfileId: state.currentProfileId,
+      activeAuthPath: null,
+      activeAuthError: error instanceof UnsupportedCredentialStoreError
+        ? error
+        : new UsageAuthError("auth_invalid", "Active Codex auth configuration or file could not be read."),
+    };
   }
-
-  // resolvedMode === "unresolved" means auto mode and live auth.json is missing
-  // (e.g., the user ran Logout in Codex Desktop). Fall back to managed
-  // snapshots so usage queries can still serve every saved account.
-  return {
-    currentProfileId: state.currentProfileId,
-    activeAuthPath: authSource.resolvedMode === "file" ? authSource.authPath : null,
-  };
 }
 
 export async function refreshUsageAuthIfStale(

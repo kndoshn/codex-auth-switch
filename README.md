@@ -18,7 +18,7 @@ It swaps only the active auth file. Your main Codex history, logs, sessions, and
 
 ## Important Constraints
 
-- **File-backed auth only.** Codex's `cli_auth_credentials_store` setting must be `"file"` (or `"auto"` resolving to a file). Keyring-backed auth is not supported.
+- **Explicit file-backed auth only.** Set `cli_auth_credentials_store = "file"` at the top level of `$CODEX_HOME/config.toml` (default: `~/.codex/config.toml`). Keyring, `"auto"`, and an omitted setting are not supported for operations that access the active Codex auth. A leftover `auth.json` does not prove that Codex uses file storage.
 - **Email is a label.** `add <email>` stores the email as a user-provided label. It is not verified against the browser session used during `codex login`.
 - **Usage is best-effort.** The `usage` command relies on Codex's internal API, which is not a public stable interface and may change without notice.
 
@@ -39,6 +39,14 @@ Verify the build:
 
 ## Quick Start
 
+Before adding your first account, set the following **before any `[table]` headings** in your Codex `config.toml`:
+
+```toml
+cli_auth_credentials_store = "file"
+```
+
+If you previously used `"auto"` or left this setting unset, explicitly select `"file"` before using this version. The tool does not edit your configuration or migrate Keyring credentials. Close Codex before the first account is automatically activated or before switching accounts.
+
 ### 1. Add an account
 
 ```bash
@@ -46,6 +54,8 @@ Verify the build:
 ```
 
 This opens a temporary `codex login` flow and saves the resulting auth snapshot under that email label.
+
+The temporary login explicitly uses file storage. If no account is currently active in this tool, the new account is automatically activated after the storage and running-process checks succeed. Later additions only save the new account.
 
 Example output:
 
@@ -182,6 +192,8 @@ Starts a temporary `codex login` flow and stores the resulting auth snapshot.
 
 - Rejects duplicate email labels
 - Normalizes the label with `trim + lowercase`
+- Before initial auto-activation, requires explicit file storage and no running Codex process; checks again after login
+- Rolls back auth changes if initial activation or state persistence fails, when restoration is possible
 
 ### `./codex-auth-switch ls`
 
@@ -194,6 +206,7 @@ Switches the active account.
 - With no `email`, opens an interactive selector
 - With `email`, switches directly
 - Fails if a Codex session appears to be running
+- Requires explicit file storage; can restore a missing live `auth.json` from the saved account
 - Syncs the current auth back into managed storage before switching
 
 ### `./codex-auth-switch remove [email] [--yes]`
@@ -217,6 +230,8 @@ Reads usage information.
 - `--json`: machine-readable output
 
 `--all` continues even when individual accounts fail. If the fetched auth belongs to a different `account_id` than expected, that account is treated as an error (fail-closed).
+
+The current account requires explicit file storage. If its live `auth.json` is missing, usage falls back to the managed snapshot. Invalid or unreadable live auth produces an error. Unsupported active storage produces an error for that account while `--all` continues querying other saved accounts. Listing accounts and removing inactive accounts do not require access to the active Codex auth.
 
 If the upstream response reports a different email than the saved label, the output shows it as `Observed email`.
 

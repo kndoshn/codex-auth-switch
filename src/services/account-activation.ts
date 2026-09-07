@@ -1,7 +1,7 @@
 import { rm } from "node:fs/promises";
 
 import type { AccountRecord, AppState } from "../types.js";
-import { AuthReadError, AuthWriteError, UnsupportedCredentialStoreError } from "../lib/errors.js";
+import { AuthReadError, AuthWriteError } from "../lib/errors.js";
 import {
   requireAccountByEmail,
   requireCurrentAccount,
@@ -10,7 +10,7 @@ import {
 } from "../lib/accounts.js";
 import { assertStoredAccountConsistency, deriveManagedAuthPath, touchAccount } from "../lib/account-record.js";
 import { readAuthFile, writeAuthFile } from "../lib/auth.js";
-import { resolveCodexAuthSource } from "../lib/codex-auth-source.js";
+import { requireFileBasedCodexAuthSource } from "../lib/codex-auth-source.js";
 import { ensureFileModeIfExists, readFileIfExists } from "../lib/fs.js";
 import { logDebug, logError, logWarn } from "../lib/log.js";
 import { ensureManagedAuthFilePermissions } from "../lib/managed-storage.js";
@@ -37,12 +37,7 @@ export async function activateStoredAccount(
 
   options.onStageChange?.("loading_account");
   const state = await loadState();
-  const activeAuthSource = await resolveCodexAuthSource(getActiveCodexHome());
-  if (activeAuthSource.resolvedMode === "keyring") {
-    throw new UnsupportedCredentialStoreError(
-      `Codex is configured to use ${activeAuthSource.configuredMode} credential storage in ${activeAuthSource.homeDir}.`,
-    );
-  }
+  const activeAuthSource = await requireFileBasedCodexAuthSource(getActiveCodexHome());
   const currentAuthPath = activeAuthSource.authPath;
   // Probe before syncing: if state still records a current profile but the
   // live auth.json is gone (e.g., the user ran Logout in the Codex Desktop

@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -14,7 +14,8 @@ import { readFileIfExists } from "../lib/fs.js";
 import { logDebug, logError, logWarn } from "../lib/log.js";
 import { withExclusiveLock } from "../lib/lock.js";
 import { ensureManagedStoragePermissions } from "../lib/managed-storage.js";
-import { getCodexAuthPath } from "../lib/paths.js";
+import { getActiveCodexHome, getCodexAuthPath } from "../lib/paths.js";
+import { assertNoRunningCodexProcess } from "../lib/process.js";
 import { loadState, saveState } from "../state/store.js";
 
 export type AddAccountStage =
@@ -34,12 +35,17 @@ export async function addAccountWithLogin(
   options.onStageChange?.("validating_email");
   const preflightState = await loadState();
   assertEmailAvailable(preflightState, email);
+  if (!preflightState.currentProfileId) {
+    await requireFileBasedCodexAuthSource(getActiveCodexHome());
+    await assertNoRunningCodexProcess();
+  }
 
   options.onStageChange?.("preparing_login");
   const tempHome = await mkdtemp(join(tmpdir(), "codex-auth-switch-add-"));
   logDebug("account.add.temp_home.created", "Created temporary CODEX_HOME.", { tempHome });
 
   try {
+    await writeFile(join(tempHome, "config.toml"), 'cli_auth_credentials_store = "file"\n', { mode: 0o600 });
     options.onStageChange?.("awaiting_login");
     await runCodexLogin(tempHome);
 
@@ -47,7 +53,7 @@ export async function addAccountWithLogin(
     const tempAuth = await readAuthFile(tempAuthSource.authPath);
     options.onStageChange?.("saving_account");
 
-    return withExclusiveLock("add", async () => persistRegisteredAccount(email, tempAuth));
+    return await withExclusiveLock("add", async () => persistRegisteredAccount(email, tempAuth));
   } finally {
     await rm(tempHome, { force: true, recursive: true }).catch((error: unknown) => {
       logWarn("account.add.temp_home.cleanup_failed", "Failed to remove temporary CODEX_HOME.", {
@@ -64,37 +70,39 @@ export async function persistRegisteredAccount(
 ): Promise<AccountRecord> {
   const state = await loadState();
   assertEmailAvailable(state, email);
-  await ensureManagedStoragePermissions();
-
-  const account = createAccountRecord(email, tempAuth.accountId);
-  await writeAuthFile(deriveManagedAuthPath(account.profileId), tempAuth.raw);
-
   const shouldAutoActivate = !state.currentProfileId;
+  if (shouldAutoActivate) {
+    await requireFileBasedCodexAuthSource(getActiveCodexHome());
+    await assertNoRunningCodexProcess();
+  }
   const currentAuthPath = getCodexAuthPath();
   const previousActiveAuth = shouldAutoActivate ? await readFileIfExists(currentAuthPath) : null;
+  await ensureManagedStoragePermissions();
+  const account = createAccountRecord(email, tempAuth.accountId);
+  const managedAuthPath = deriveManagedAuthPath(account.profileId);
   let nextState = upsertAccount(state, account);
-
-  if (shouldAutoActivate) {
-    logDebug("account.add.auto_activate", "No active account. Auto-activating the newly added account.", {
-      email,
-      profileId: account.profileId,
-    });
-    await writeAuthFile(currentAuthPath, tempAuth.raw);
-    nextState = setCurrentProfile(nextState, account.profileId);
-  }
-
+  let activeAuthWriteAttempted = false;
   try {
+    await writeAuthFile(managedAuthPath, tempAuth.raw);
+    if (shouldAutoActivate) {
+      logDebug("account.add.auto_activate", "No active account. Auto-activating the newly added account.", {
+        email,
+        profileId: account.profileId,
+      });
+      activeAuthWriteAttempted = true;
+      await writeAuthFile(currentAuthPath, tempAuth.raw);
+      nextState = setCurrentProfile(nextState, account.profileId);
+    }
     await saveState(nextState);
   } catch (error) {
-    logError("account.add.state_save_failure", "Failed to save state for the new account.", {
+    logError("account.add.state_save_failure", "Failed to persist the new account.", {
       email,
       profileId: account.profileId,
       error,
     });
-    if (shouldAutoActivate) {
+    if (activeAuthWriteAttempted) {
       await restorePreviousActiveAuth(currentAuthPath, previousActiveAuth);
     }
-    const managedAuthPath = deriveManagedAuthPath(account.profileId);
     await rm(managedAuthPath, { force: true }).catch((cleanupError: unknown) => {
       logWarn("account.add.rollback.cleanup_failed", "Failed to remove auth file during rollback.", {
         authPath: managedAuthPath,

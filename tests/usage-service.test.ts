@@ -1,13 +1,13 @@
 import { chmod, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { getAccountAuthPath, getCodexAuthPath } from "../src/lib/paths.js";
 import { fetchUsage, fetchUsageForAll } from "../src/services/usage-service.js";
 import type { AccountRecord } from "../src/types.js";
 import { saveState } from "../src/state/store.js";
-import { withTempHome } from "./helpers/home.js";
+import { withFileCodexHome as withTempHome } from "./helpers/home.js";
 
 function createAccount(email: string, accountId: string, profileId = email): AccountRecord {
   return {
@@ -58,7 +58,12 @@ async function writeRefreshableAuthFile(
 }
 
 describe("usage service", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-04-17T00:00:00.000Z"));
+  });
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 

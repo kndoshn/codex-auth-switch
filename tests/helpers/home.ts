@@ -1,6 +1,14 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+
+export async function withFileCodexHome<T>(run: (homeDir: string) => Promise<T>): Promise<T> {
+  return withTempHome(async (homeDir) => {
+    await mkdir(join(homeDir, ".codex"));
+    await writeFile(join(homeDir, ".codex", "config.toml"), 'cli_auth_credentials_store = "file"\n');
+    return run(homeDir);
+  });
+}
 
 export async function withTempHome<T>(run: (homeDir: string) => Promise<T>): Promise<T> {
   const homeDir = await mkdtemp(join(tmpdir(), "codex-auth-switch-test-home-"));

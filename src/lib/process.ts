@@ -26,6 +26,9 @@ export async function findRunningCodexProcesses(): Promise<PsEntry[]> {
     const result = await execa("ps", ["-A", "-o", "pid=,args="], {
       reject: false,
     });
+    if (result.exitCode !== 0) {
+      throw new ProcessInspectionError("Process inspection exited unsuccessfully.");
+    }
     stdout = result.stdout;
   } catch (error) {
     logWarn("process.inspect.failure", "Failed to inspect running processes.", {

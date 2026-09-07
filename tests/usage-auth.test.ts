@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
   UsageAuthError,
@@ -19,7 +19,7 @@ import {
 } from "../src/services/usage-auth.js";
 import { saveState } from "../src/state/store.js";
 import type { AccountRecord, StoredAuthFile } from "../src/types.js";
-import { withTempHome } from "./helpers/home.js";
+import { withFileCodexHome as withTempHome } from "./helpers/home.js";
 
 function createAccount(email: string, profileId: string, accountId: string): AccountRecord {
   return {
@@ -78,7 +78,12 @@ function createUsageAuthState(overrides: Partial<UsageAuthState> = {}): UsageAut
 }
 
 describe("usage-auth helpers", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-04-17T00:00:00.000Z"));
+  });
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -273,4 +278,31 @@ describe("usage-auth helpers", () => {
       message: "refresh payload parse failed",
     });
   });
+});
+
+test.each([
+  ["2026-04-17T00:00:00Z", 8 * 86400000 - 1, false],
+  ["2026-04-17T00:00:00Z", 8 * 86400000, true],
+  ["2026-04-17T00:00:00Z", 8 * 86400000 + 1, true],
+  ["2030-09-07T00:00:00Z", 8 * 86400000 - 1, false],
+  ["2030-09-07T00:00:00Z", 8 * 86400000, true],
+  ["2030-09-07T00:00:00Z", 8 * 86400000 + 1, true],
+] as const)("refresh boundary at %s with age %s", async (now, age, refreshExpected) => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(now));
+  try {
+    await withTempHome(async () => {
+      const account = createAccount("boundary@example.com", "boundary", "acct-1");
+      const usageAuth = createUsageAuthState({ authPath: account.authPath });
+      usageAuth.auth.lastRefresh = new Date(Date.now() - age).toISOString();
+      const fetch = vi.fn(async () => new Response(JSON.stringify({ access_token: "new-token" })));
+      vi.stubGlobal("fetch", fetch);
+      const result = await refreshUsageAuthIfStale(account, usageAuth);
+      expect(fetch).toHaveBeenCalledTimes(refreshExpected ? 1 : 0);
+      expect(result.auth.accessToken).toBe(refreshExpected ? "new-token" : "token-1");
+    });
+  } finally {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  }
 });

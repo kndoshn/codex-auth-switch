@@ -26,6 +26,7 @@ describe("process helpers", () => {
 
   test("detects codex in direct and wrapper-style command lines but ignores the current process", async () => {
     execaMock.mockResolvedValue({
+      exitCode: 0,
       stdout: [
         `${process.pid} /usr/local/bin/codex login`,
         "123 /usr/local/bin/node /tmp/codex.js login",
@@ -42,6 +43,7 @@ describe("process helpers", () => {
 
   test("ignores unrelated commands", async () => {
     execaMock.mockResolvedValue({
+      exitCode: 0,
       stdout: "123 codex-helper\n124 /usr/bin/node\n125 /usr/local/bin/codex-auth-switch use\n",
     });
 
@@ -51,6 +53,7 @@ describe("process helpers", () => {
 
   test("throws a typed error with detected processes when a codex process is already running", async () => {
     execaMock.mockResolvedValue({
+      exitCode: 0,
       stdout: "999 codex\n",
     });
 
@@ -61,6 +64,7 @@ describe("process helpers", () => {
 
   test("error displayMessage includes detected process info", async () => {
     execaMock.mockResolvedValue({
+      exitCode: 0,
       stdout: "999 /Applications/Codex.app/Contents/MacOS/Codex\n",
     });
 
@@ -95,4 +99,9 @@ describe("process helpers", () => {
 
     await expect(findRunningCodexProcesses()).rejects.toBeInstanceOf(ProcessInspectionError);
   });
+});
+
+test("rejects a failed ps exit even if its output is empty", async () => {
+  execaMock.mockResolvedValue({ exitCode: 1, stdout: "" });
+  await expect(assertNoRunningCodexProcess()).rejects.toBeInstanceOf(ProcessInspectionError);
 });

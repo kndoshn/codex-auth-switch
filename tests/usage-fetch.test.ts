@@ -14,7 +14,7 @@ import {
   requestUsagePayload,
 } from "../src/services/usage-fetch.js";
 import { saveState } from "../src/state/store.js";
-import { withTempHome } from "./helpers/home.js";
+import { withFileCodexHome as withTempHome } from "./helpers/home.js";
 
 function createAccount(email: string, profileId: string, accountId: string): AccountRecord {
   return {
@@ -76,7 +76,7 @@ describe("usage-fetch helpers", () => {
     });
   });
 
-  test("createUsageFetchContext returns null activeAuthPath when auth.json is missing in auto mode", async () => {
+  test("createUsageFetchContext returns null activeAuthPath when auth.json is missing in file mode", async () => {
     await withTempHome(async () => {
       const currentAccount = {
         ...createAccount("current@example.com", "profile-current", "acct-current"),
@@ -88,8 +88,7 @@ describe("usage-fetch helpers", () => {
         accounts: { "profile-current": currentAccount },
       });
 
-      // No config.toml, no live auth.json: simulates Codex Desktop logout in
-      // the default "auto" credential store mode.
+      // Explicit file mode with missing live auth simulates desktop logout.
       await expect(createUsageFetchContext(currentAccount)).resolves.toEqual({
         currentProfileId: "profile-current",
         activeAuthPath: null,
@@ -97,7 +96,7 @@ describe("usage-fetch helpers", () => {
     });
   });
 
-  test("createUsageFetchContext throws when config selects keyring storage", async () => {
+  test("createUsageFetchContext records an account-local error when config selects keyring storage", async () => {
     await withTempHome(async () => {
       const currentAccount = {
         ...createAccount("current@example.com", "profile-current", "acct-current"),
@@ -113,9 +112,9 @@ describe("usage-fetch helpers", () => {
       await mkdir(dirname(configPath), { recursive: true });
       await writeFile(configPath, 'cli_auth_credentials_store = "keyring"\n', "utf8");
 
-      await expect(createUsageFetchContext(currentAccount)).rejects.toBeInstanceOf(
-        UnsupportedCredentialStoreError,
-      );
+      await expect(createUsageFetchContext(currentAccount)).resolves.toMatchObject({
+        activeAuthError: expect.any(UnsupportedCredentialStoreError),
+      });
     });
   });
 
