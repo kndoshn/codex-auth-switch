@@ -5,9 +5,7 @@ import { describe, expect, test } from "vitest";
 
 import { AuthReadError } from "../src/lib/errors.js";
 import {
-  extractAccessToken,
   extractAccountId,
-  readAccessTokenFile,
   readAuthFile,
   updateAuthFileTokens,
   writeAuthFile,
@@ -15,7 +13,7 @@ import {
 import { withTempHome } from "./helpers/home.js";
 
 describe("auth helpers", () => {
-  test("extracts account_id and access_token from auth payloads", () => {
+  test("extracts account_id from auth payloads", () => {
     const raw = JSON.stringify({
       tokens: {
         account_id: "acct-123",
@@ -24,32 +22,13 @@ describe("auth helpers", () => {
     });
 
     expect(extractAccountId(raw)).toBe("acct-123");
-    expect(extractAccessToken(raw)).toBe("token-123");
   });
 
-  test("throws a typed error when access_token is missing", () => {
-    const raw = JSON.stringify({
-      tokens: {
-        account_id: "acct-123",
-      },
-    });
-
-    expect(() => extractAccessToken(raw)).toThrow(AuthReadError);
-  });
-
-  test("reads access_token directly from an auth file", async () => {
-    await withTempHome(async (homeDir) => {
-      const authPath = join(homeDir, "accounts", "auth.json");
-      await mkdir(dirname(authPath), { recursive: true });
-      await writeFile(authPath, JSON.stringify({
-        tokens: {
-          account_id: "acct-123",
-          access_token: "token-123",
-        },
-      }), "utf8");
-
-      await expect(readAccessTokenFile(authPath)).resolves.toBe("token-123");
-    });
+  test.each([
+    { name: "access_token is missing", tokens: { account_id: "acct-123" } },
+    { name: "account_id is empty", tokens: { account_id: "", access_token: "token-123" } },
+  ])("throws a typed error when $name", ({ tokens }) => {
+    expect(() => extractAccountId(JSON.stringify({ tokens }))).toThrow(AuthReadError);
   });
 
   test("reads account metadata and access token together from an auth file", async () => {
@@ -135,20 +114,33 @@ describe("auth helpers", () => {
     expect(() => extractAccountId(JSON.stringify([]))).toThrow(AuthReadError);
   });
 
-  test("rejects missing auth files when reading an access token", async () => {
+  test("wraps missing auth files while keeping ENOENT as the cause", async () => {
     await withTempHome(async (homeDir) => {
-      await expect(readAccessTokenFile(join(homeDir, "missing.json"))).rejects.toMatchObject({
-        code: "ENOENT",
+      await expect(readAuthFile(join(homeDir, "missing.json"))).rejects.toMatchObject({
+        name: "AuthReadError",
+        cause: expect.objectContaining({ code: "ENOENT" }),
       });
     });
   });
 
-  test("wraps non-ENOENT access token read failures", async () => {
+  test("wraps auth read failures for paths that are not files", async () => {
     await withTempHome(async (homeDir) => {
       const authPath = join(homeDir, "directory-auth");
       await mkdir(authPath, { recursive: true });
 
-      await expect(readAccessTokenFile(authPath)).rejects.toBeInstanceOf(AuthReadError);
+      await expect(readAuthFile(authPath)).rejects.toBeInstanceOf(AuthReadError);
+    });
+  });
+
+  test("rejects invalid JSON without exposing the file contents", async () => {
+    await withTempHome(async (homeDir) => {
+      const authPath = join(homeDir, "invalid.json");
+      await writeFile(authPath, '{"tokens": {"access_token": "secret-token"', "utf8");
+
+      const error = await readAuthFile(authPath).catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(AuthReadError);
+      expect((error as Error).message).not.toContain("secret-token");
     });
   });
 

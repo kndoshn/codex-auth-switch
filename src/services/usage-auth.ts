@@ -80,21 +80,6 @@ export async function readUsageAuthState(
   }
 }
 
-export async function resolveUsageAuthPath(
-  account: AccountRecord,
-  context?: UsageFetchContext,
-): Promise<string> {
-  const resolvedContext = context ?? await createUsageFetchContext(account);
-  if (resolvedContext.currentProfileId === account.profileId && resolvedContext.activeAuthError) {
-    throw resolvedContext.activeAuthError;
-  }
-  if (resolvedContext.currentProfileId !== account.profileId || !resolvedContext.activeAuthPath) {
-    return deriveManagedAuthPath(account.profileId);
-  }
-
-  return resolvedContext.activeAuthPath;
-}
-
 export async function createUsageFetchContext(
   ...accounts: readonly AccountRecord[]
 ): Promise<UsageFetchContext> {

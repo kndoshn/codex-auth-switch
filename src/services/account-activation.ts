@@ -1,5 +1,3 @@
-import { rm } from "node:fs/promises";
-
 import type { AccountRecord, AppState } from "../types.js";
 import { AuthReadError, AuthWriteError } from "../lib/errors.js";
 import {
@@ -8,11 +6,11 @@ import {
   setCurrentProfile,
   upsertAccount,
 } from "../lib/accounts.js";
-import { assertStoredAccountConsistency, deriveManagedAuthPath, touchAccount } from "../lib/account-record.js";
-import { readAuthFile, writeAuthFile } from "../lib/auth.js";
+import { assertStoredAccountConsistency, touchAccount } from "../lib/account-record.js";
+import { readAuthFile, readAuthSnapshot, restoreAuthSnapshot, writeAuthFile } from "../lib/auth.js";
 import { requireFileBasedCodexAuthSource } from "../lib/codex-auth-source.js";
-import { ensureFileModeIfExists, readFileIfExists } from "../lib/fs.js";
-import { logDebug, logError, logWarn } from "../lib/log.js";
+import { readFileIfExists } from "../lib/fs.js";
+import { logDebug, logWarn } from "../lib/log.js";
 import { ensureManagedAuthFilePermissions } from "../lib/managed-storage.js";
 import { assertNoRunningCodexProcess } from "../lib/process.js";
 import { getActiveCodexHome } from "../lib/paths.js";
@@ -64,7 +62,7 @@ export async function activateStoredAccount(
   const targetAuth = await readAuthFile(targetAuthPath);
   assertStoredAccountConsistency(account, targetAuth.accountId);
 
-  const previousAuth = syncResult.previousAuth ?? await readExistingFile(currentAuthPath);
+  const previousAuth = syncResult.previousAuth ?? await readAuthSnapshot(currentAuthPath);
 
   const updatedAccount = touchAccount(account);
   const nextState = setCurrentProfile(
@@ -137,43 +135,7 @@ export async function syncCurrentActiveAccountSnapshot(
   };
 }
 
-export async function readExistingFile(path: string): Promise<string | null> {
-  logDebug("auth.current.read.start", "Reading current auth file before switch.", { path });
-  try {
-    const raw = await readFileIfExists(path);
-    if (raw === null) {
-      logDebug("auth.current.read.missing", "Current auth file does not exist.", { path });
-      return null;
-    }
-
-    logDebug("auth.current.read.success", "Read current auth file before switch.", { path });
-    return raw;
-  } catch (error) {
-    logError("auth.current.read.failure", "Failed to read the current auth file before switch.", {
-      path,
-      error,
-    });
-    throw new AuthReadError(`Failed to read existing auth file: ${path}`, {
-      cause: error,
-    });
-  }
-}
-
-export async function restorePreviousAuth(
-  currentAuthPath: string,
-  previousAuth: string | null,
-): Promise<void> {
-  if (previousAuth === null) {
-    logDebug("auth.restore.remove", "Removing current auth file during rollback.", { currentAuthPath });
-    await rm(currentAuthPath, { force: true });
-    return;
-  }
-
-  logDebug("auth.restore.write", "Restoring previous auth file during rollback.", { currentAuthPath });
-  await writeAuthFile(currentAuthPath, previousAuth);
-}
-
-export async function rollbackActivatedAuth(
+async function rollbackActivatedAuth(
   email: string,
   currentAuthPath: string,
   previousAuth: string | null,
@@ -182,7 +144,7 @@ export async function rollbackActivatedAuth(
     logWarn("account.activate.rollback.start", "State save failed. Restoring previous auth.", {
       email,
     });
-    await restorePreviousAuth(currentAuthPath, previousAuth);
+    await restoreAuthSnapshot(currentAuthPath, previousAuth);
     logWarn("account.activate.rollback.success", "Restored previous auth after state save failure.", {
       email,
     });

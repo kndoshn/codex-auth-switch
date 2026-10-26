@@ -7,14 +7,20 @@ import type { AccountRecord } from "../src/types.js";
 import { getAccountAuthPath } from "../src/lib/paths.js";
 import { UnsupportedCredentialStoreError, UsageFetchError } from "../src/lib/errors.js";
 import { getCodexAuthPath, getCodexConfigPath } from "../src/lib/paths.js";
-import {
-  createUsageFetchContext,
-  readUsageAccessToken,
-  resolveUsageAuthPath,
-  requestUsagePayload,
-} from "../src/services/usage-fetch.js";
+import { createUsageFetchContext, readUsageAuthState } from "../src/services/usage-auth.js";
+import { requestUsagePayload } from "../src/services/usage-endpoint.js";
 import { saveState } from "../src/state/store.js";
 import { withFileCodexHome as withTempHome } from "./helpers/home.js";
+
+async function writeAuth(path: string, accountId: string, accessToken: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, JSON.stringify({
+    tokens: {
+      account_id: accountId,
+      access_token: accessToken,
+    },
+  }), "utf8");
+}
 
 function createAccount(email: string, profileId: string, accountId: string): AccountRecord {
   return {
@@ -45,8 +51,12 @@ describe("usage-fetch helpers", () => {
           [account.profileId]: account,
         },
       });
+      await writeAuth(account.authPath, account.accountId, "token-stored");
 
-      await expect(resolveUsageAuthPath(account)).resolves.toBe(account.authPath);
+      await expect(readUsageAuthState(account)).resolves.toMatchObject({
+        authPath: account.authPath,
+        isLiveAuth: false,
+      });
     });
   });
 
@@ -64,15 +74,13 @@ describe("usage-fetch helpers", () => {
         },
       });
 
-      await mkdir(dirname(getCodexAuthPath()), { recursive: true });
-      await writeFile(getCodexAuthPath(), JSON.stringify({
-        tokens: {
-          account_id: "acct-current",
-          access_token: "token-current",
-        },
-      }), "utf8");
+      await writeAuth(getCodexAuthPath(), "acct-current", "token-current");
 
-      await expect(resolveUsageAuthPath(currentAccount)).resolves.toBe(getCodexAuthPath());
+      await expect(readUsageAuthState(currentAccount)).resolves.toMatchObject({
+        authPath: getCodexAuthPath(),
+        isLiveAuth: true,
+        auth: expect.objectContaining({ accessToken: "token-current" }),
+      });
     });
   });
 
@@ -118,7 +126,7 @@ describe("usage-fetch helpers", () => {
     });
   });
 
-  test("resolveUsageAuthPath falls back to managed path when live auth.json is missing", async () => {
+  test("falls back to the managed snapshot when live auth.json is missing", async () => {
     await withTempHome(async () => {
       const currentAccount = {
         ...createAccount("current@example.com", "profile-current", "acct-current"),
@@ -130,9 +138,14 @@ describe("usage-fetch helpers", () => {
         accounts: { "profile-current": currentAccount },
       });
 
-      // No live auth.json on disk: resolveUsageAuthPath should degrade to the
-      // managed snapshot path so usage queries can still serve the account.
-      await expect(resolveUsageAuthPath(currentAccount)).resolves.toBe(currentAccount.authPath);
+      await writeAuth(currentAccount.authPath, "acct-current", "token-snapshot");
+
+      // No live auth.json on disk: usage degrades to the managed snapshot so
+      // queries can still serve the account.
+      await expect(readUsageAuthState(currentAccount)).resolves.toMatchObject({
+        authPath: currentAccount.authPath,
+        isLiveAuth: false,
+      });
     });
   });
 
@@ -144,7 +157,7 @@ describe("usage-fetch helpers", () => {
     });
   });
 
-  test("reads the access token from the resolved auth state", async () => {
+  test("reads the access token from the provided context", async () => {
     await withTempHome(async () => {
       const account = createAccount("stored@example.com", "profile-stored", "acct-stored");
       await mkdir(dirname(account.authPath), { recursive: true });
@@ -155,10 +168,10 @@ describe("usage-fetch helpers", () => {
         },
       }), "utf8");
 
-      await expect(readUsageAccessToken(account, {
+      await expect(readUsageAuthState(account, {
         currentProfileId: null,
         activeAuthPath: null,
-      })).resolves.toBe("token-stored");
+      })).resolves.toMatchObject({ auth: expect.objectContaining({ accessToken: "token-stored" }) });
     });
   });
 });

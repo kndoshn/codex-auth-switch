@@ -27,7 +27,7 @@ export async function findRunningCodexProcesses(): Promise<PsEntry[]> {
       reject: false,
     });
     if (result.exitCode !== 0) {
-      throw new ProcessInspectionError("Process inspection exited unsuccessfully.");
+      throw new Error(`ps exited with code ${result.exitCode}.`);
     }
     stdout = result.stdout;
   } catch (error) {

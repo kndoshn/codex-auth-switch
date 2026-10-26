@@ -1,18 +1,11 @@
-import { rm } from "node:fs/promises";
-
-import {
-  ActiveAccountRemovalError,
-  AuthReadError,
-  AuthWriteError,
-} from "../lib/errors.js";
+import { ActiveAccountRemovalError, AuthWriteError } from "../lib/errors.js";
 import {
   clearCurrentProfile,
   removeAccountByProfileId,
   requireAccountByEmail,
 } from "../lib/accounts.js";
-import { extractAccountId, writeAuthFile } from "../lib/auth.js";
+import { extractAccountId, readAuthSnapshot, removeAuthFile, restoreAuthSnapshot } from "../lib/auth.js";
 import { requireFileBasedCodexAuthSource } from "../lib/codex-auth-source.js";
-import { readFileIfExists } from "../lib/fs.js";
 import { logDebug, logWarn } from "../lib/log.js";
 import { assertNoRunningCodexProcess } from "../lib/process.js";
 import { getActiveCodexHome } from "../lib/paths.js";
@@ -66,7 +59,7 @@ async function removeInactiveAccount(
     options,
     nextState,
     rollbackFiles: [
-      { path: account.authPath, raw: await readExistingFile(account.authPath) },
+      { path: account.authPath, raw: await readAuthSnapshot(account.authPath) },
     ],
   });
 
@@ -87,12 +80,12 @@ async function removeSoleActiveAccount(
 
   const activeAuthSource = await requireFileBasedCodexAuthSource(getActiveCodexHome());
   const rollbackFiles: RemovedAuthFile[] = [
-    { path: account.authPath, raw: await readExistingFile(account.authPath) },
+    { path: account.authPath, raw: await readAuthSnapshot(account.authPath) },
   ];
 
   // Only sign out of the live session when it belongs to the removed account.
   // A missing file (logout) or another identity (external login) stays untouched.
-  const liveAuthRaw = await readExistingFile(activeAuthSource.authPath);
+  const liveAuthRaw = await readAuthSnapshot(activeAuthSource.authPath);
   if (liveAuthRaw !== null && extractAccountId(liveAuthRaw) === account.accountId) {
     rollbackFiles.push({ path: activeAuthSource.authPath, raw: liveAuthRaw });
   } else {
@@ -119,14 +112,6 @@ async function removeSoleActiveAccount(
 
 function isCurrentAccount(state: AppState, profileId: string): boolean {
   return state.currentProfileId === profileId;
-}
-
-async function removeAuthFile(path: string): Promise<void> {
-  try {
-    await rm(path, { force: true });
-  } catch (error) {
-    throw new AuthWriteError(`Failed to remove auth file: ${path}`, { cause: error });
-  }
 }
 
 // Removes every file in rollbackFiles, then saves state. Any failure restores
@@ -162,7 +147,7 @@ async function rollbackRemovedFiles(
 
   try {
     for (const file of files) {
-      await restoreRemovedFile(file);
+      await restoreAuthSnapshot(file.path, file.raw);
     }
     logWarn("account.remove.rollback.success", "Restored removed auth files after state save failure.", {
       email,
@@ -171,25 +156,6 @@ async function rollbackRemovedFiles(
   } catch (restoreError) {
     throw new AuthWriteError("Failed to restore auth files after state update failure.", {
       cause: restoreError,
-    });
-  }
-}
-
-async function restoreRemovedFile(file: RemovedAuthFile): Promise<void> {
-  if (file.raw === null) {
-    await removeAuthFile(file.path);
-    return;
-  }
-
-  await writeAuthFile(file.path, file.raw);
-}
-
-async function readExistingFile(path: string): Promise<string | null> {
-  try {
-    return await readFileIfExists(path);
-  } catch (error) {
-    throw new AuthReadError(`Failed to read existing auth file: ${path}`, {
-      cause: error,
     });
   }
 }

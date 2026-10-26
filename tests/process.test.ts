@@ -14,7 +14,6 @@ import {
 } from "../src/lib/process.js";
 import {
   CodexProcessRunningError,
-  NotImplementedError,
   ProcessInspectionError,
 } from "../src/lib/errors.js";
 
@@ -88,11 +87,6 @@ describe("process helpers", () => {
     expect(error.displayMessage).toContain("Retry the command.");
   });
 
-  test("not implemented errors use the shared user-facing message", () => {
-    const error = new NotImplementedError("todo");
-    expect(error.exitCode).toBe(2);
-    expect(error.displayMessage).toBe("This feature is not implemented yet.");
-  });
 
   test("wraps ps inspection failures in a typed error", async () => {
     execaMock.mockRejectedValue(new Error("ps failed"));
