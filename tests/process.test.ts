@@ -87,7 +87,6 @@ describe("process helpers", () => {
     expect(error.displayMessage).toContain("Retry the command.");
   });
 
-
   test("wraps ps inspection failures in a typed error", async () => {
     execaMock.mockRejectedValue(new Error("ps failed"));
 
@@ -98,4 +97,23 @@ describe("process helpers", () => {
 test("rejects a failed ps exit even if its output is empty", async () => {
   execaMock.mockResolvedValue({ exitCode: 1, stdout: "" });
   await expect(assertNoRunningCodexProcess()).rejects.toBeInstanceOf(ProcessInspectionError);
+});
+
+test.each([
+  {
+    name: "a non-zero exit code",
+    result: { failed: true, exitCode: 1, stdout: "" },
+    cause: "ps exited with code 1.",
+  },
+  {
+    name: "a spawn failure without an exit code",
+    result: { failed: true, exitCode: undefined, stdout: "", shortMessage: "Command failed with EPERM: ps -A -o pid=,args=" },
+    cause: "Command failed with EPERM: ps -A -o pid=,args=",
+  },
+])("explains $name in the inspection error cause", async ({ result, cause }) => {
+  execaMock.mockResolvedValue(result);
+  await expect(findRunningCodexProcesses()).rejects.toMatchObject({
+    name: "ProcessInspectionError",
+    cause: expect.objectContaining({ message: cause }),
+  });
 });
