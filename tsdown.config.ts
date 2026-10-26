@@ -2,7 +2,8 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig({
   entry: "src/index.ts",
-  dts: true,
+  // bin-only package: nothing consumes type declarations.
+  dts: false,
   clean: true,
   format: "esm",
   platform: "node",
