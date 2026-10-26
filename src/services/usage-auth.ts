@@ -3,7 +3,9 @@ import { deriveManagedAuthPath } from "../lib/account-record.js";
 import { readAuthFile, updateAuthFileTokens, writeAuthFile } from "../lib/auth.js";
 import { requireFileBasedCodexAuthSource } from "../lib/codex-auth-source.js";
 import { UnsupportedCredentialStoreError, UsageAuthError, UsageFetchError } from "../lib/errors.js";
-import { ensureFileModeIfExists, readFileIfExists } from "../lib/fs.js";
+import { ensureFileModeIfExists, isFileNotFoundError, readFileIfExists } from "../lib/fs.js";
+import { isRecord } from "../lib/guards.js";
+import { fetchWithTimeout, formatTimeoutMessage, isTimeoutError } from "../lib/http.js";
 import { logDebug, logWarn } from "../lib/log.js";
 import { ensureManagedStoragePermissions } from "../lib/managed-storage.js";
 import { getActiveCodexHome } from "../lib/paths.js";
@@ -76,21 +78,6 @@ export async function readUsageAuthState(
       cause: error,
     });
   }
-}
-
-export async function resolveUsageAuthPath(
-  account: AccountRecord,
-  context?: UsageFetchContext,
-): Promise<string> {
-  const resolvedContext = context ?? await createUsageFetchContext(account);
-  if (resolvedContext.currentProfileId === account.profileId && resolvedContext.activeAuthError) {
-    throw resolvedContext.activeAuthError;
-  }
-  if (resolvedContext.currentProfileId !== account.profileId || !resolvedContext.activeAuthPath) {
-    return deriveManagedAuthPath(account.profileId);
-  }
-
-  return resolvedContext.activeAuthPath;
 }
 
 export async function createUsageFetchContext(
@@ -209,7 +196,7 @@ async function requestAuthRefresh(refreshToken: string): Promise<{
 }> {
   let response: Response;
   try {
-    response = await fetch(REFRESH_TOKEN_ENDPOINT, {
+    response = await fetchWithTimeout(REFRESH_TOKEN_ENDPOINT, {
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -222,6 +209,10 @@ async function requestAuthRefresh(refreshToken: string): Promise<{
       }),
     });
   } catch (error) {
+    if (isTimeoutError(error)) {
+      throw new UsageFetchError("network_error", formatTimeoutMessage("Refresh endpoint"), { cause: error });
+    }
+
     if (error instanceof Error) {
       throw new UsageFetchError("network_error", error.message, { cause: error });
     }
@@ -246,6 +237,10 @@ async function requestAuthRefresh(refreshToken: string): Promise<{
   try {
     payload = await response.json();
   } catch (error) {
+    if (isTimeoutError(error)) {
+      throw new UsageFetchError("network_error", formatTimeoutMessage("Refresh endpoint"), { cause: error });
+    }
+
     if (error instanceof Error) {
       throw new UsageFetchError("malformed_response", error.message);
     }
@@ -344,18 +339,11 @@ function isRefreshResponse(
   return isRecord(payload);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
+// readAuthFile wraps ENOENT, so look through the cause chain.
 function isNotFoundError(error: unknown): boolean {
-  if (error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT") {
+  if (isFileNotFoundError(error)) {
     return true;
   }
 
-  if (error instanceof Error && "cause" in error) {
-    return isNotFoundError(error.cause);
-  }
-
-  return false;
+  return error instanceof Error && "cause" in error && isNotFoundError(error.cause);
 }

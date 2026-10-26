@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 import { LockAcquisitionError } from "./errors.js";
-import { ensureDirectory, writeFileAtomic } from "./fs.js";
+import { ensureDirectory, hasErrorCode, writeFileAtomic } from "./fs.js";
+import { isRecord } from "./guards.js";
 import { logDebug, logWarn } from "./log.js";
 import { getConfigDir, getLockPath } from "./paths.js";
 
@@ -21,39 +22,46 @@ export async function withExclusiveLock<T>(
   operation: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  const startedAt = Date.now();
   logDebug("lock.acquire.start", "Attempting to acquire lock.", { operation });
+  await acquireLock(operation);
 
+  // Run the critical section outside the acquisition retry loop so its own
+  // errors (even EEXIST) are never mistaken for lock contention.
+  try {
+    await writeLockInfo(operation);
+    logDebug("lock.acquire.success", "Acquired lock.", { operation });
+    return await fn();
+  } finally {
+    await rm(getLockPath(), { force: true, recursive: true });
+    logDebug("lock.release.success", "Released lock.", { operation });
+  }
+}
+
+async function acquireLock(operation: string): Promise<void> {
+  const startedAt = Date.now();
   await ensureDirectory(getConfigDir());
 
   while (true) {
     try {
       await mkdir(getLockPath(), { mode: 0o700 });
-      try {
-        await writeLockInfo(operation);
-        logDebug("lock.acquire.success", "Acquired lock.", { operation });
-        return await fn();
-      } finally {
-        await rm(getLockPath(), { force: true, recursive: true });
-        logDebug("lock.release.success", "Released lock.", { operation });
-      }
+      return;
     } catch (error) {
-      if (!isLockExistsError(error)) {
+      if (!hasErrorCode(error, "EEXIST")) {
         throw error;
       }
-
-      if (await removeStaleLockIfNeeded()) {
-        logWarn("lock.stale.removed", "Removed a stale lock before retrying.", { operation });
-        continue;
-      }
-
-      if (Date.now() - startedAt >= LOCK_ACQUIRE_TIMEOUT_MS) {
-        throw new LockAcquisitionError(`Failed to acquire lock for ${operation}.`);
-      }
-
-      logDebug("lock.acquire.retry", "Lock is busy. Waiting before retrying.", { operation });
-      await delay(LOCK_RETRY_DELAY_MS);
     }
+
+    if (await removeStaleLockIfNeeded()) {
+      logWarn("lock.stale.removed", "Removed a stale lock before retrying.", { operation });
+      continue;
+    }
+
+    if (Date.now() - startedAt >= LOCK_ACQUIRE_TIMEOUT_MS) {
+      throw new LockAcquisitionError(`Failed to acquire lock for ${operation}.`);
+    }
+
+    logDebug("lock.acquire.retry", "Lock is busy. Waiting before retrying.", { operation });
+    await delay(LOCK_RETRY_DELAY_MS);
   }
 }
 
@@ -63,10 +71,6 @@ function createLockInfo(operation: string): LockInfo {
     operation,
     acquiredAt: new Date().toISOString(),
   };
-}
-
-function isLockExistsError(error: unknown): boolean {
-  return error instanceof Error && "code" in error && error.code === "EEXIST";
 }
 
 async function writeLockInfo(operation: string): Promise<void> {
@@ -123,14 +127,11 @@ async function removeStaleLockIfNeeded(): Promise<boolean> {
 }
 
 function isLockInfo(value: unknown): value is LockInfo {
-  const record = value as Record<string, unknown>;
   return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value) &&
-    typeof record.pid === "number" &&
-    typeof record.operation === "string" &&
-    typeof record.acquiredAt === "string"
+    isRecord(value) &&
+    typeof value.pid === "number" &&
+    typeof value.operation === "string" &&
+    typeof value.acquiredAt === "string"
   );
 }
 
@@ -139,6 +140,6 @@ function isProcessAlive(pid: number): boolean {
     process.kill(pid, 0);
     return true;
   } catch (error) {
-    return error instanceof Error && "code" in error && error.code === "EPERM";
+    return hasErrorCode(error, "EPERM");
   }
 }

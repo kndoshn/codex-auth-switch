@@ -40,10 +40,6 @@ export function logWarn(event: string, message: string, context?: LogContext): v
   writeLog("warn", event, message, context);
 }
 
-export function logInfo(event: string, message: string, context?: LogContext): void {
-  writeLog("info", event, message, context);
-}
-
 export function logDebug(event: string, message: string, context?: LogContext): void {
   writeLog("debug", event, message, context);
 }

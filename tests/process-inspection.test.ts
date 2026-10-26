@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   getBasename,
-  hasRunningCodexCommand,
+  findRunningCodexEntries,
   isCodexCommand,
   isCodexToken,
   looksLikeCodexWrapperToken,
@@ -47,18 +47,19 @@ describe("process inspection helpers", () => {
     expect(isCodexCommand("/usr/bin/node /tmp/codex-auth-switch.js use")).toBe(false);
   });
 
-  test("hasRunningCodexCommand ignores the current pid and unrelated entries", () => {
+  test("findRunningCodexEntries ignores the current pid and unrelated entries", () => {
     const stdout = [
       "101 /usr/local/bin/codex login",
       "202 /usr/bin/node /tmp/codex.mjs login",
       "303 /usr/bin/node /tmp/codex-auth-switch.js use",
       "404 /usr/bin/python worker.py",
+      "not a ps line",
+      "",
     ].join("\n");
 
-    expect(hasRunningCodexCommand(stdout, 101)).toBe(true);
-    expect(hasRunningCodexCommand(stdout, 202)).toBe(true);
-    expect(hasRunningCodexCommand(stdout, 999)).toBe(true);
-    expect(hasRunningCodexCommand("303 /usr/bin/node /tmp/codex-auth-switch.js use", 999)).toBe(false);
+    expect(findRunningCodexEntries(stdout, 101).map((entry) => entry.pid)).toEqual([202]);
+    expect(findRunningCodexEntries(stdout, 999).map((entry) => entry.pid)).toEqual([101, 202]);
+    expect(findRunningCodexEntries("303 /usr/bin/node /tmp/codex-auth-switch.js use", 999)).toEqual([]);
   });
 
   test("getBasename strips wrapping quotes", () => {

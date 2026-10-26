@@ -9,6 +9,7 @@ import {
   ensureDirectory,
   ensureDirectoryModeIfExists,
   ensureFileModeIfExists,
+  hasErrorCode,
   isFileNotFoundError,
   readFileIfExists,
   writeFileAtomic,
@@ -135,13 +136,22 @@ describe("fs helpers", () => {
     });
   });
 
-  test("rethrows non-ENOENT read errors", async () => {
-    const dirPath = join(tempDir, "directory");
-    await ensureDirectory(dirPath);
+  test.each([
+    { name: "directory", normalize: ensureDirectoryModeIfExists, mode: 0o700 },
+    { name: "file", normalize: ensureFileModeIfExists, mode: 0o600 },
+  ])("rethrows non-ENOENT errors when normalizing $name permissions", async ({ normalize, mode }) => {
+    const filePath = join(tempDir, "plain-file");
+    await writeFile(filePath, "not a directory", "utf8");
 
-    await expect(readFileIfExists(dirPath)).rejects.toMatchObject({
-      code: "EISDIR",
+    await expect(normalize(join(filePath, "child"), mode)).rejects.toMatchObject({
+      code: "ENOTDIR",
     });
+  });
+
+  test("matches error codes only on Error instances", () => {
+    expect(hasErrorCode(Object.assign(new Error("exists"), { code: "EEXIST" }), "EEXIST")).toBe(true);
+    expect(hasErrorCode(Object.assign(new Error("exists"), { code: "EEXIST" }), "ENOENT")).toBe(false);
+    expect(hasErrorCode({ code: "EEXIST" }, "EEXIST")).toBe(false);
   });
 
   test("detects ENOENT errors", () => {

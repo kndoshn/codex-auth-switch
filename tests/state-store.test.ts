@@ -130,6 +130,41 @@ describe("state store", () => {
     });
   });
 
+  test.each([
+    {
+      name: "a profile ID that could escape the accounts directory",
+      accounts: { "../escape": accountFixture("../escape") },
+      currentProfileId: null,
+    },
+    {
+      name: "an account stored under a different key than its profile ID",
+      accounts: { "profile-a": accountFixture("profile-b") },
+      currentProfileId: null,
+    },
+    {
+      name: "a current profile that is not saved",
+      accounts: { "profile-a": accountFixture("profile-a") },
+      currentProfileId: "profile-missing",
+    },
+  ])("rejects $name when loading", async ({ accounts, currentProfileId }) => {
+    await withTempHome(async () => {
+      const statePath = getStatePath();
+      await mkdir(dirname(statePath), { recursive: true });
+      await writeFile(statePath, JSON.stringify({ currentProfileId, accounts }), "utf8");
+
+      await expect(loadState()).rejects.toBeInstanceOf(StateCorruptionError);
+    });
+  });
+
+  test("refuses to save an account whose profile ID is not a safe file name", async () => {
+    await withTempHome(async () => {
+      await expect(saveState({
+        currentProfileId: null,
+        accounts: { "a/b": { ...accountFixture("a/b"), authPath: "/tmp/ignored.json" } },
+      })).rejects.toBeInstanceOf(StateWriteError);
+    });
+  });
+
   test("rejects invalid state objects before writing", async () => {
     await withTempHome(async () => {
       await expect(saveState({
@@ -151,3 +186,13 @@ describe("state store", () => {
     });
   });
 });
+
+function accountFixture(profileId: string) {
+  return {
+    profileId,
+    email: `${profileId.replace(/[^a-z0-9-]/gi, "x")}@example.com`,
+    accountId: `acct-${profileId}`,
+    createdAt: "2026-04-04T00:00:00.000Z",
+    lastUsedAt: "2026-04-04T00:00:00.000Z",
+  };
+}

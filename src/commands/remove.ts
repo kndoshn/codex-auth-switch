@@ -1,4 +1,3 @@
-import { confirm } from "@inquirer/prompts";
 import { Command, Option } from "clipanion";
 
 import { promptForSavedAccount } from "./account-prompt.js";
@@ -61,6 +60,7 @@ export class RemoveCommand extends Command {
 }
 
 async function confirmRemoval(account: AccountRecord): Promise<boolean> {
+  const { confirm } = await import("@inquirer/prompts");
   return confirm({
     message: `Remove ${account.email} (${account.accountId})?`,
     default: false,

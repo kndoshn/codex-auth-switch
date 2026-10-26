@@ -1,5 +1,6 @@
 import type { UsageFailureCode, UsageResult, UsageSnapshot, UsageWindow } from "../types.js";
 import { UsageFetchError } from "./errors.js";
+import { isRecord } from "./guards.js";
 
 export function toUsageSnapshot(raw: unknown, email: string): UsageSnapshot {
   if (!isRecord(raw)) {
@@ -93,10 +94,6 @@ function resolveWindowMinutes(raw: Record<string, unknown>): number | null {
   }
 
   return null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function normalizeObservedEmail(value: unknown): string | null {

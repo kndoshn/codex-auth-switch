@@ -103,5 +103,9 @@ async function cleanupStaleTmpFiles(path: string): Promise<void> {
 }
 
 export function isFileNotFoundError(error: unknown): boolean {
-  return error instanceof Error && "code" in error && error.code === "ENOENT";
+  return hasErrorCode(error, "ENOENT");
+}
+
+export function hasErrorCode(error: unknown, code: string): boolean {
+  return error instanceof Error && "code" in error && error.code === code;
 }

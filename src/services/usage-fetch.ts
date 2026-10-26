@@ -3,17 +3,12 @@ import { UnsupportedCredentialStoreError } from "../lib/errors.js";
 import { logDebug, logWarn } from "../lib/log.js";
 import { toUsageFailure, toUsageSnapshot } from "../lib/usage.js";
 import {
-  createUsageFetchContext,
   readUsageAuthState,
   refreshUsageAuthAfterUnauthorized,
   refreshUsageAuthIfStale,
-  resolveUsageAuthPath,
   type UsageFetchContext,
 } from "./usage-auth.js";
 import { requestUsagePayload } from "./usage-endpoint.js";
-
-export { createUsageFetchContext, resolveUsageAuthPath } from "./usage-auth.js";
-export { requestUsagePayload } from "./usage-endpoint.js";
 
 export async function fetchUsage(
   account: AccountRecord,
@@ -37,25 +32,10 @@ export async function fetchUsage(
       snapshot,
     };
   } catch (error) {
-    if (error instanceof UnsupportedCredentialStoreError) {
-      const failure = {
-        code: "auth_invalid" as const,
-        message: error.displayMessage,
-      };
-      logDebug("usage.fetch.failure", "Failed to fetch usage for account.", {
-        email: account.email,
-        code: failure.code,
-        detail: failure.message,
-      });
-      return {
-        email: account.email,
-        ok: false,
-        code: failure.code,
-        error: failure.message,
-      };
-    }
-
-    const failure = toUsageFailure(error);
+    // The storage error's display message tells the user how to fix the config.
+    const failure = error instanceof UnsupportedCredentialStoreError
+      ? { code: "auth_invalid" as const, message: error.displayMessage }
+      : toUsageFailure(error);
     logDebug("usage.fetch.failure", "Failed to fetch usage for account.", {
       email: account.email,
       code: failure.code,
@@ -113,12 +93,4 @@ export async function fetchUsageSnapshot(
   }
 
   return snapshot;
-}
-
-export async function readUsageAccessToken(
-  account: AccountRecord,
-  context?: UsageFetchContext,
-): Promise<string> {
-  const usageAuth = await readUsageAuthState(account, context);
-  return usageAuth.auth.accessToken;
 }

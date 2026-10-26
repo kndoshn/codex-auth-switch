@@ -220,7 +220,7 @@ Removes a saved account.
 - With no `email`, opens an interactive selector
 - Prompts for confirmation unless `--yes` is provided
 - Removes the managed auth snapshot and the state entry
-- If the target is the sole active account, also removes `$CODEX_HOME/auth.json`
+- If the target is the sole active account, also removes `$CODEX_HOME/auth.json` when it holds that account's Account ID. A missing `auth.json` (after logging out) or one for another account (after an external login) is left untouched
 - Refuses to remove the active account while other saved accounts still exist
 - Fails if a Codex session appears to be running during sole-active removal
 
@@ -238,6 +238,8 @@ Reads usage information.
 The selected account requires file storage (explicit or the default). If its live `auth.json` is missing, usage falls back to the managed snapshot. Invalid or unreadable live auth produces an error. A live account ID that differs from the selected account produces `auth_mismatch`; usage does not relabel another account's credentials. Unsupported active storage produces an error for that account while `--all` continues querying other saved accounts. `usage --all` marks the saved selection as `(Selected)`. Listing accounts remains available when the auth file is missing or invalid, and removing inactive accounts does not require access to the active Codex auth.
 
 If the upstream response reports a different email than the saved label, the output shows it as `Observed email`.
+
+Usage and token refresh requests time out after 15 seconds and are reported as `network_error`.
 
 ## Where Data Is Stored
 

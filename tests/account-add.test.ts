@@ -27,6 +27,8 @@ describe("account-add helpers", () => {
         }),
         accountId: "acct-foo",
         accessToken: "token-foo",
+        refreshToken: null,
+        lastRefresh: null,
       })).rejects.toThrow("disk full");
 
       await expect(readdir(getAccountsDir())).resolves.toEqual([]);
@@ -61,6 +63,8 @@ describe("account-add helpers", () => {
         }),
         accountId: "acct-foo",
         accessToken: "token-foo",
+        refreshToken: null,
+        lastRefresh: null,
       })).rejects.toThrow("disk full");
 
       await expect(readFile(getCodexAuthPath(), "utf8")).resolves.toBe(previousAuth);

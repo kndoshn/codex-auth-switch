@@ -34,10 +34,6 @@ export function findRunningCodexEntries(stdout: string, currentPid: number): PsE
     }, []);
 }
 
-export function hasRunningCodexCommand(stdout: string, currentPid: number): boolean {
-  return findRunningCodexEntries(stdout, currentPid).length > 0;
-}
-
 export function isCodexCommand(command: string): boolean {
   const tokens = tokenizeCommandLine(command);
   if (tokens.some((token) => isCodexToken(token))) {

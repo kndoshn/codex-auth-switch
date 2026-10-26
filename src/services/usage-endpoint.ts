@@ -1,13 +1,15 @@
 import { UsageFetchError } from "../lib/errors.js";
+import { fetchWithTimeout, formatTimeoutMessage, isTimeoutError } from "../lib/http.js";
 import { logDebug, logWarn } from "../lib/log.js";
 import { mapUsageHttpFailure } from "../lib/usage-http.js";
 
 const USAGE_ENDPOINT = "https://chatgpt.com/backend-api/wham/usage";
+const ENDPOINT_LABEL = "Usage endpoint";
 
 export async function requestUsagePayload(accessToken: string): Promise<unknown> {
   let response: Response;
   try {
-    response = await fetch(USAGE_ENDPOINT, {
+    response = await fetchWithTimeout(USAGE_ENDPOINT, {
       method: "GET",
       headers: {
         Accept: "application/json",
@@ -18,6 +20,9 @@ export async function requestUsagePayload(accessToken: string): Promise<unknown>
     logWarn("usage.http.network_failure", "Failed to reach usage endpoint.", {
       error,
     });
+    if (isTimeoutError(error)) {
+      throw new UsageFetchError("network_error", formatTimeoutMessage(ENDPOINT_LABEL), { cause: error });
+    }
     if (error instanceof Error) {
       throw new UsageFetchError("network_error", error.message, { cause: error });
     }
@@ -48,6 +53,10 @@ export async function requestUsagePayload(accessToken: string): Promise<unknown>
   try {
     return await response.json();
   } catch (error) {
+    if (isTimeoutError(error)) {
+      logWarn("usage.http.timeout", "Usage endpoint body did not arrive in time.", { error });
+      throw new UsageFetchError("network_error", formatTimeoutMessage(ENDPOINT_LABEL), { cause: error });
+    }
     logWarn("usage.http.invalid_json", "Usage endpoint returned invalid JSON.", {
       error,
     });

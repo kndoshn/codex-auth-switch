@@ -132,6 +132,7 @@ describe("log helpers", () => {
   });
 
   test("clears active loading output before writing a log entry", () => {
+    vi.stubEnv("CODEX_AUTH_SWITCH_LOG_LEVEL", "error");
     const stream = createStream(true);
     const loading = createLoadingIndicator(stream);
     const stderrWrite = vi.spyOn(process.stderr, "write").mockImplementation(() => true);

@@ -8,9 +8,8 @@ import type { AccountRecord, StoredAuthFile } from "../types.js";
 import { CodexLoginFailedError } from "../lib/errors.js";
 import { assertEmailAvailable, setCurrentProfile, upsertAccount } from "../lib/accounts.js";
 import { createAccountRecord, deriveManagedAuthPath } from "../lib/account-record.js";
-import { readAuthFile, writeAuthFile } from "../lib/auth.js";
+import { readAuthFile, readAuthSnapshot, restoreAuthSnapshot, writeAuthFile } from "../lib/auth.js";
 import { requireFileBasedCodexAuthSource } from "../lib/codex-auth-source.js";
-import { readFileIfExists } from "../lib/fs.js";
 import { logDebug, logError, logWarn } from "../lib/log.js";
 import { withExclusiveLock } from "../lib/lock.js";
 import { ensureManagedStoragePermissions } from "../lib/managed-storage.js";
@@ -76,7 +75,7 @@ export async function persistRegisteredAccount(
     await assertNoRunningCodexProcess();
   }
   const currentAuthPath = getCodexAuthPath();
-  const previousActiveAuth = shouldAutoActivate ? await readFileIfExists(currentAuthPath) : null;
+  const previousActiveAuth = shouldAutoActivate ? await readAuthSnapshot(currentAuthPath) : null;
   await ensureManagedStoragePermissions();
   const account = createAccountRecord(email, tempAuth.accountId);
   const managedAuthPath = deriveManagedAuthPath(account.profileId);
@@ -120,12 +119,7 @@ async function restorePreviousActiveAuth(
   previousActiveAuth: string | null,
 ): Promise<void> {
   try {
-    if (previousActiveAuth === null) {
-      await rm(currentAuthPath, { force: true });
-      return;
-    }
-
-    await writeAuthFile(currentAuthPath, previousActiveAuth);
+    await restoreAuthSnapshot(currentAuthPath, previousActiveAuth);
   } catch (cleanupError) {
     logWarn("account.add.rollback.active_auth_restore_failed", "Failed to restore the active auth file during rollback.", {
       authPath: currentAuthPath,

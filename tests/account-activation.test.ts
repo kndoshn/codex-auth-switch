@@ -4,17 +4,14 @@ import { dirname, join } from "node:path";
 import { describe, expect, test } from "vitest";
 
 import type { AppState } from "../src/types.js";
-import {
-  readExistingFile,
-  restorePreviousAuth,
-  syncCurrentActiveAccountSnapshot,
-} from "../src/services/account-activation.js";
+import { readAuthSnapshot, restoreAuthSnapshot } from "../src/lib/auth.js";
+import { syncCurrentActiveAccountSnapshot } from "../src/services/account-activation.js";
 import { withTempHome } from "./helpers/home.js";
 
-describe("account-activation helpers", () => {
+describe("auth snapshot and activation helpers", () => {
   test("returns null when the previous auth file is missing", async () => {
     await withTempHome(async (homeDir) => {
-      await expect(readExistingFile(join(homeDir, "missing.json"))).resolves.toBeNull();
+      await expect(readAuthSnapshot(join(homeDir, "missing.json"))).resolves.toBeNull();
     });
   });
 
@@ -24,7 +21,7 @@ describe("account-activation helpers", () => {
       await mkdir(dirname(authPath), { recursive: true });
       await writeFile(authPath, "new-auth", "utf8");
 
-      await restorePreviousAuth(authPath, "previous-auth");
+      await restoreAuthSnapshot(authPath, "previous-auth");
 
       await expect(readFile(authPath, "utf8")).resolves.toBe("previous-auth");
     });
@@ -36,7 +33,7 @@ describe("account-activation helpers", () => {
       await mkdir(dirname(authPath), { recursive: true });
       await writeFile(authPath, "new-auth", "utf8");
 
-      await restorePreviousAuth(authPath, null);
+      await restoreAuthSnapshot(authPath, null);
 
       await expect(readFile(authPath, "utf8")).rejects.toMatchObject({
         code: "ENOENT",

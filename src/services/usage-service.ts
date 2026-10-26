@@ -4,4 +4,3 @@ export {
   type UsageAggregationOptions,
   type UsageFetchProgress,
 } from "./usage-aggregation.js";
-export { mapWithConcurrency } from "./usage-concurrency.js";

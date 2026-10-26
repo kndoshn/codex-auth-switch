@@ -1,22 +1,16 @@
-import { readFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 
 import { AuthReadError, AuthWriteError } from "./errors.js";
-import { isFileNotFoundError, writeFileAtomic } from "./fs.js";
+import { readFileIfExists, writeFileAtomic } from "./fs.js";
+import { isRecord } from "./guards.js";
 import { logDebug, logError, logWarn } from "./log.js";
 import type { StoredAuthFile } from "../types.js";
 
 export async function readAuthFile(path: string): Promise<StoredAuthFile> {
   logDebug("auth.read.start", "Reading auth file.", { path });
   try {
-    const raw = await requireAuthRaw(path);
-    const metadata = extractAuthMetadata(raw);
-    const auth = {
-      raw,
-      accountId: metadata.accountId,
-      accessToken: metadata.accessToken,
-      refreshToken: metadata.refreshToken,
-      lastRefresh: metadata.lastRefresh,
-    };
+    const raw = await readFile(path, "utf8");
+    const auth = { raw, ...extractAuthMetadata(raw) };
     logDebug("auth.read.success", "Read auth file.", { path, accountId: auth.accountId });
     return auth;
   } catch (error) {
@@ -29,35 +23,6 @@ export async function readAuthFile(path: string): Promise<StoredAuthFile> {
     }
 
     logError("auth.read.failure", "Failed to read auth file.", {
-      path,
-      error,
-    });
-    throw new AuthReadError(`Failed to read auth file: ${path}`, { cause: error });
-  }
-}
-
-export async function readAccessTokenFile(path: string): Promise<string> {
-  logDebug("auth.token.read.start", "Reading access token from auth file.", { path });
-  try {
-    const raw = await requireAuthRaw(path);
-    const accessToken = extractAccessToken(raw);
-    logDebug("auth.token.read.success", "Read access token from auth file.", { path });
-    return accessToken;
-  } catch (error) {
-    if (isFileNotFoundError(error)) {
-      logWarn("auth.token.read.missing", "Auth file does not exist.", { path });
-      throw error;
-    }
-
-    if (error instanceof AuthReadError) {
-      logWarn("auth.token.read.invalid", "Access token could not be read from auth file.", {
-        path,
-        error,
-      });
-      throw error;
-    }
-
-    logError("auth.token.read.failure", "Failed to read access token from auth file.", {
       path,
       error,
     });
@@ -79,12 +44,41 @@ export async function writeAuthFile(path: string, raw: string): Promise<void> {
   }
 }
 
-export function extractAccountId(raw: string): string {
-  return extractAuthTokens(raw).accountId;
+// Captures an auth file's raw contents for rollback; null means it does not exist.
+export async function readAuthSnapshot(path: string): Promise<string | null> {
+  try {
+    return await readFileIfExists(path);
+  } catch (error) {
+    logError("auth.snapshot.read.failure", "Failed to read existing auth file.", {
+      path,
+      error,
+    });
+    throw new AuthReadError(`Failed to read existing auth file: ${path}`, { cause: error });
+  }
 }
 
-export function extractAccessToken(raw: string): string {
-  return extractAuthTokens(raw).accessToken;
+// Puts an auth file back to a snapshot from readAuthSnapshot.
+export async function restoreAuthSnapshot(path: string, snapshot: string | null): Promise<void> {
+  if (snapshot === null) {
+    logDebug("auth.restore.remove", "Removing auth file during rollback.", { path });
+    await removeAuthFile(path);
+    return;
+  }
+
+  logDebug("auth.restore.write", "Restoring auth file during rollback.", { path });
+  await writeAuthFile(path, snapshot);
+}
+
+export async function removeAuthFile(path: string): Promise<void> {
+  try {
+    await rm(path, { force: true });
+  } catch (error) {
+    throw new AuthWriteError(`Failed to remove auth file: ${path}`, { cause: error });
+  }
+}
+
+export function extractAccountId(raw: string): string {
+  return extractAuthMetadata(raw).accountId;
 }
 
 export function updateAuthFileTokens(
@@ -116,14 +110,6 @@ export function updateAuthFileTokens(
   }
 
   return JSON.stringify(document.root, null, 2);
-}
-
-function extractAuthTokens(raw: string): { accountId: string; accessToken: string } {
-  const metadata = extractAuthMetadata(raw);
-  return {
-    accountId: metadata.accountId,
-    accessToken: metadata.accessToken,
-  };
 }
 
 function extractAuthMetadata(
@@ -190,12 +176,4 @@ function parseAuthDocument(raw: string): { root: Record<string, unknown>; tokens
     root: parsed,
     tokens,
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-async function requireAuthRaw(path: string): Promise<string> {
-  return readFile(path, "utf8");
 }

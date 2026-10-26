@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { afterEach, describe, expect, test } from "vitest";
@@ -25,7 +25,7 @@ import type { AccountRecord, AppState } from "../src/types.js";
 import { withFileCodexHome as withTempHome } from "./helpers/home.js";
 
 const { execaMock } = vi.hoisted(() => ({
-  execaMock: vi.fn(async () => ({
+  execaMock: vi.fn(async (_command: string, _args: string[], _options: { env?: NodeJS.ProcessEnv }) => ({
     exitCode: 0,
   })),
 }));
@@ -533,6 +533,28 @@ describe("activateAccount", () => {
     });
   });
 
+  test("reports a typed error when restoring the previous auth also fails during activation", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const account = createAccountRecordFixture("profile-1", "foo@example.com", "acct-1");
+
+      await writeAuthFixture(account.authPath, account.accountId, "token-stored");
+      await stateStore.saveState(createStateFixture(null, [account]));
+
+      // A non-empty directory at auth.json makes removing the written file fail.
+      vi.spyOn(stateStore, "saveState").mockImplementationOnce(async () => {
+        await rm(currentAuthPath, { force: true });
+        await mkdir(join(currentAuthPath, "blocker"), { recursive: true });
+        throw new Error("disk full");
+      });
+
+      await expect(activateAccount("foo@example.com")).rejects.toMatchObject({
+        name: "AuthWriteError",
+        message: "Failed to restore previous auth after state update failure.",
+      });
+    });
+  });
+
   test("removes the written auth file when state persistence fails during activation with no previous auth", async () => {
     await withTempHome(async () => {
       const accountAuthPath = getAccountAuthPath("profile_1");
@@ -637,6 +659,107 @@ describe("removeAccount", () => {
         code: "ENOENT",
       });
       expect(assertNoRunningCodexProcessMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  test("removes the sole active account when the live auth.json is already missing", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const account = createAccountRecordFixture("profile-1", "foo@example.com", "acct-1");
+
+      await writeAuthFixture(account.authPath, account.accountId, "token-stored");
+      await stateStore.saveState(createStateFixture(account.profileId, [account]));
+
+      await expect(removeAccount("foo@example.com")).resolves.toMatchObject({ email: account.email });
+
+      await expect(stateStore.loadState()).resolves.toEqual({
+        currentProfileId: null,
+        accounts: {},
+      });
+      await expect(readFile(account.authPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(readFile(currentAuthPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    });
+  });
+
+  test("keeps an externally logged-in auth.json when removing the sole active account", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const account = createAccountRecordFixture("profile-1", "foo@example.com", "acct-1");
+      const externalRaw = createAuthRaw("acct-external", "token-external");
+
+      await writeAuthFixture(currentAuthPath, "acct-external", "token-external");
+      await writeAuthFixture(account.authPath, account.accountId, "token-stored");
+      await stateStore.saveState(createStateFixture(account.profileId, [account]));
+
+      await removeAccount("foo@example.com");
+
+      await expect(stateStore.loadState()).resolves.toEqual({
+        currentProfileId: null,
+        accounts: {},
+      });
+      await expect(readFile(account.authPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(readFile(currentAuthPath, "utf8")).resolves.toBe(externalRaw);
+    });
+  });
+
+  test("restores the managed snapshot when state persistence fails after the live auth.json went missing", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const account = createAccountRecordFixture("profile-1", "foo@example.com", "acct-1");
+      const storedRaw = createAuthRaw(account.accountId, "token-stored");
+
+      await writeAuthFixture(account.authPath, account.accountId, "token-stored");
+      await stateStore.saveState(createStateFixture(account.profileId, [account]));
+
+      const saveStateSpy = vi.spyOn(stateStore, "saveState").mockRejectedValueOnce(new Error("disk full"));
+
+      await expect(removeAccount("foo@example.com")).rejects.toThrow("disk full");
+
+      await expect(readFile(account.authPath, "utf8")).resolves.toBe(storedRaw);
+      await expect(readFile(currentAuthPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(stateStore.loadState()).resolves.toMatchObject({ currentProfileId: account.profileId });
+
+      saveStateSpy.mockRestore();
+    });
+  });
+
+  test("refuses sole active removal when the live auth.json is malformed", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const account = createAccountRecordFixture("profile-1", "foo@example.com", "acct-1");
+
+      await mkdir(dirname(currentAuthPath), { recursive: true });
+      await writeFile(currentAuthPath, "{not json", "utf8");
+      await writeAuthFixture(account.authPath, account.accountId, "token-stored");
+      await stateStore.saveState(createStateFixture(account.profileId, [account]));
+
+      await expect(removeAccount("foo@example.com")).rejects.toBeInstanceOf(AuthReadError);
+
+      await expect(readFile(currentAuthPath, "utf8")).resolves.toBe("{not json");
+      await expect(readFile(account.authPath, "utf8")).resolves.toContain("token-stored");
+      await expect(stateStore.loadState()).resolves.toMatchObject({ currentProfileId: account.profileId });
+    });
+  });
+
+  test("reports a typed error when restoring removed auth files also fails", async () => {
+    await withTempHome(async () => {
+      const currentAccount = createAccountRecordFixture("profile-current", "current@example.com", "acct-current");
+      const targetAccount = createAccountRecordFixture("profile-target", "target@example.com", "acct-target");
+
+      await writeAuthFixture(currentAccount.authPath, currentAccount.accountId, "token-current-stored");
+      await writeAuthFixture(targetAccount.authPath, targetAccount.accountId, "token-target-stored");
+      await stateStore.saveState(createStateFixture(currentAccount.profileId, [currentAccount, targetAccount]));
+
+      // A non-empty directory at the snapshot path makes the restore rename fail.
+      vi.spyOn(stateStore, "saveState").mockImplementationOnce(async () => {
+        await mkdir(join(targetAccount.authPath, "blocker"), { recursive: true });
+        throw new Error("disk full");
+      });
+
+      await expect(removeAccount("target@example.com")).rejects.toMatchObject({
+        name: "AuthWriteError",
+        message: "Failed to restore auth files after state update failure.",
+      });
     });
   });
 

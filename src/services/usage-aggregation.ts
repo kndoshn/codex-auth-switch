@@ -2,7 +2,8 @@ import type { AccountRecord, UsageResult } from "../types.js";
 import { sortAccountsByEmail } from "../lib/accounts.js";
 import { logDebug } from "../lib/log.js";
 import { mapWithConcurrency } from "./usage-concurrency.js";
-import { createUsageFetchContext, fetchUsage } from "./usage-fetch.js";
+import { createUsageFetchContext } from "./usage-auth.js";
+import { fetchUsage } from "./usage-fetch.js";
 
 const DEFAULT_CONCURRENCY = 4;
 

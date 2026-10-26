@@ -17,16 +17,6 @@ export class CodexAuthSwitchError extends Error {
   }
 }
 
-export class NotImplementedError extends CodexAuthSwitchError {
-  constructor(message: string, options?: ErrorOptions) {
-    super(message, {
-      ...options,
-      exitCode: 2,
-      displayMessage: "This feature is not implemented yet.",
-    });
-  }
-}
-
 export class InputValidationError extends CodexAuthSwitchError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, {

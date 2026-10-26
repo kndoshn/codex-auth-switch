@@ -4,11 +4,11 @@
   "description": "Switch Codex CLI personal accounts and inspect usage.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kndoshn/codex-switch.git"
+    "url": "git+https://github.com/kndoshn/codex-auth-switch.git"
   },
-  "homepage": "https://github.com/kndoshn/codex-switch#readme",
+  "homepage": "https://github.com/kndoshn/codex-auth-switch#readme",
   "bugs": {
-    "url": "https://github.com/kndoshn/codex-switch/issues"
+    "url": "https://github.com/kndoshn/codex-auth-switch/issues"
   },
   "keywords": [
     "codex",
@@ -31,7 +31,7 @@
     "darwin",
     "linux"
   ],
-  "packageManager": "pnpm@10.15.1",
+  "packageManager": "pnpm@10.34.7",
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsdown",
@@ -44,18 +44,19 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@inquirer/prompts": "^8.4.1",
+    "@inquirer/prompts": "^8.7.3",
     "clipanion": "4.0.0-rc.4",
-    "execa": "9.6.1",
-    "smol-toml": "1.8.0",
-    "valibot": "1.4.2"
+    "execa": "10.2.0",
+    "smol-toml": "1.9.1",
+    "valibot": "1.5.0"
   },
   "devDependencies": {
-    "@types/node": "24.12.2",
-    "@vitest/coverage-v8": "^4.1.4",
-    "tsdown": "^0.21.9",
-    "tsx": "4.21.0",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.4"
+    "@types/node": "24.19.2",
+    "@vitest/coverage-v8": "^5.0.5",
+    "tsdown": "^0.23.1",
+    "tsx": "4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
   }
 }

@@ -1,18 +1,18 @@
 import { Builtins, Cli } from "clipanion";
 
+import packageJson from "../package.json" with { type: "json" };
+
 import { AddCommand } from "./commands/add.js";
 import { ListCommand } from "./commands/list.js";
 import { RemoveCommand } from "./commands/remove.js";
 import { UseCommand } from "./commands/use.js";
 import { UsageCommand } from "./commands/usage.js";
 
-const VERSION = "0.1.0";
-
 export async function runCli(argv: string[]): Promise<void> {
   const cli = new Cli({
     binaryLabel: "codex-auth-switch",
     binaryName: "codex-auth-switch",
-    binaryVersion: VERSION,
+    binaryVersion: packageJson.version,
   });
 
   cli.register(AddCommand);
