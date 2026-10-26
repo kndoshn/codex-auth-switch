@@ -44,6 +44,15 @@ describe("usage helpers", () => {
     );
   });
 
+  test.each([
+    { name: "an array payload", payload: [] },
+    { name: "an array rate_limit", payload: { rate_limit: [] } },
+  ])("rejects $name as malformed", ({ payload }) => {
+    expect(() => toUsageSnapshot(payload, "foo@example.com")).toThrow(
+      expect.objectContaining({ code: "malformed_response" }),
+    );
+  });
+
   test("captures the observed email returned by the usage endpoint", () => {
     const snapshot = toUsageSnapshot({
       email: " Admin@Northview.jp ",

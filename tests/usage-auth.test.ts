@@ -259,6 +259,25 @@ describe("usage-auth helpers", () => {
     });
   });
 
+  test("bounds the refresh request with an abort signal and reports timeouts", async () => {
+    const account = createAccount("stored@example.com", "profile-stored", "acct-1");
+    const usageAuth = createUsageAuthState();
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit): Promise<Response> => {
+      throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(refreshUsageAuthAfterUnauthorized(
+      account,
+      usageAuth,
+      new UsageFetchError("unauthorized", "denied"),
+    )).rejects.toMatchObject<Partial<UsageFetchError>>({
+      code: "network_error",
+      message: "Refresh endpoint did not respond within 15 seconds.",
+    });
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
   test("wraps Error JSON failures from the refresh endpoint", async () => {
     const account = createAccount("stored@example.com", "profile-stored", "acct-1");
     const usageAuth = createUsageAuthState();

@@ -55,4 +55,41 @@ describe("usage-endpoint", () => {
       message: "unexpected end of json input",
     });
   });
+
+  test("bounds the request with an abort signal", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    }) satisfies Partial<Response> as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await requestUsagePayload("token");
+
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  test("reports a timeout as a network error with a readable message", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    }));
+
+    await expect(requestUsagePayload("token")).rejects.toMatchObject<Partial<UsageFetchError>>({
+      code: "network_error",
+      message: "Usage endpoint did not respond within 15 seconds.",
+    });
+  });
+
+  test("reports a timeout while reading the body as a network error", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => Promise.reject(new DOMException("The operation was aborted due to timeout", "TimeoutError")),
+    }) satisfies Partial<Response> as Response));
+
+    await expect(requestUsagePayload("token")).rejects.toMatchObject<Partial<UsageFetchError>>({
+      code: "network_error",
+      message: "Usage endpoint did not respond within 15 seconds.",
+    });
+  });
 });

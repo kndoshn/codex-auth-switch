@@ -239,6 +239,8 @@ The selected account requires file storage (explicit or the default). If its liv
 
 If the upstream response reports a different email than the saved label, the output shows it as `Observed email`.
 
+Usage and token refresh requests time out after 15 seconds and are reported as `network_error`.
+
 ## Where Data Is Stored
 
 Managed auth snapshots live outside the main Codex directory:

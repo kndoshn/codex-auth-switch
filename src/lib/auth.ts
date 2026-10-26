@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import { AuthReadError, AuthWriteError } from "./errors.js";
 import { isFileNotFoundError, writeFileAtomic } from "./fs.js";
+import { isRecord } from "./guards.js";
 import { logDebug, logError, logWarn } from "./log.js";
 import type { StoredAuthFile } from "../types.js";
 
@@ -190,10 +191,6 @@ function parseAuthDocument(raw: string): { root: Record<string, unknown>; tokens
     root: parsed,
     tokens,
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function requireAuthRaw(path: string): Promise<string> {
