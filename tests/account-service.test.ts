@@ -640,6 +640,85 @@ describe("removeAccount", () => {
     });
   });
 
+  test("removes the sole active account when the live auth.json is already missing", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const account = createAccountRecordFixture("profile-1", "foo@example.com", "acct-1");
+
+      await writeAuthFixture(account.authPath, account.accountId, "token-stored");
+      await stateStore.saveState(createStateFixture(account.profileId, [account]));
+
+      await expect(removeAccount("foo@example.com")).resolves.toMatchObject({ email: account.email });
+
+      await expect(stateStore.loadState()).resolves.toEqual({
+        currentProfileId: null,
+        accounts: {},
+      });
+      await expect(readFile(account.authPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(readFile(currentAuthPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    });
+  });
+
+  test("keeps an externally logged-in auth.json when removing the sole active account", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const account = createAccountRecordFixture("profile-1", "foo@example.com", "acct-1");
+      const externalRaw = createAuthRaw("acct-external", "token-external");
+
+      await writeAuthFixture(currentAuthPath, "acct-external", "token-external");
+      await writeAuthFixture(account.authPath, account.accountId, "token-stored");
+      await stateStore.saveState(createStateFixture(account.profileId, [account]));
+
+      await removeAccount("foo@example.com");
+
+      await expect(stateStore.loadState()).resolves.toEqual({
+        currentProfileId: null,
+        accounts: {},
+      });
+      await expect(readFile(account.authPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(readFile(currentAuthPath, "utf8")).resolves.toBe(externalRaw);
+    });
+  });
+
+  test("restores the managed snapshot when state persistence fails after the live auth.json went missing", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const account = createAccountRecordFixture("profile-1", "foo@example.com", "acct-1");
+      const storedRaw = createAuthRaw(account.accountId, "token-stored");
+
+      await writeAuthFixture(account.authPath, account.accountId, "token-stored");
+      await stateStore.saveState(createStateFixture(account.profileId, [account]));
+
+      const saveStateSpy = vi.spyOn(stateStore, "saveState").mockRejectedValueOnce(new Error("disk full"));
+
+      await expect(removeAccount("foo@example.com")).rejects.toThrow("disk full");
+
+      await expect(readFile(account.authPath, "utf8")).resolves.toBe(storedRaw);
+      await expect(readFile(currentAuthPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(stateStore.loadState()).resolves.toMatchObject({ currentProfileId: account.profileId });
+
+      saveStateSpy.mockRestore();
+    });
+  });
+
+  test("refuses sole active removal when the live auth.json is malformed", async () => {
+    await withTempHome(async () => {
+      const currentAuthPath = getCodexAuthPath();
+      const account = createAccountRecordFixture("profile-1", "foo@example.com", "acct-1");
+
+      await mkdir(dirname(currentAuthPath), { recursive: true });
+      await writeFile(currentAuthPath, "{not json", "utf8");
+      await writeAuthFixture(account.authPath, account.accountId, "token-stored");
+      await stateStore.saveState(createStateFixture(account.profileId, [account]));
+
+      await expect(removeAccount("foo@example.com")).rejects.toBeInstanceOf(AuthReadError);
+
+      await expect(readFile(currentAuthPath, "utf8")).resolves.toBe("{not json");
+      await expect(readFile(account.authPath, "utf8")).resolves.toContain("token-stored");
+      await expect(stateStore.loadState()).resolves.toMatchObject({ currentProfileId: account.profileId });
+    });
+  });
+
   test("refuses to remove the active account while other saved accounts remain", async () => {
     await withTempHome(async () => {
       const currentAuthPath = getCodexAuthPath();

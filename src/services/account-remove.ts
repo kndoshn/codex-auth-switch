@@ -10,12 +10,10 @@ import {
   removeAccountByProfileId,
   requireAccountByEmail,
 } from "../lib/accounts.js";
-import { assertStoredAccountConsistency } from "../lib/account-record.js";
-import { readAuthFile, writeAuthFile } from "../lib/auth.js";
+import { extractAccountId, writeAuthFile } from "../lib/auth.js";
 import { requireFileBasedCodexAuthSource } from "../lib/codex-auth-source.js";
 import { readFileIfExists } from "../lib/fs.js";
 import { logDebug, logWarn } from "../lib/log.js";
-import { ensureManagedStoragePermissions } from "../lib/managed-storage.js";
 import { assertNoRunningCodexProcess } from "../lib/process.js";
 import { getActiveCodexHome } from "../lib/paths.js";
 import type { AccountRecord, AppState } from "../types.js";
@@ -70,7 +68,6 @@ async function removeInactiveAccount(
     rollbackFiles: [
       { path: account.authPath, raw: await readExistingFile(account.authPath) },
     ],
-    removePaths: [account.authPath],
   });
 
   logDebug("account.remove.success", "Removed inactive account.", {
@@ -89,21 +86,20 @@ async function removeSoleActiveAccount(
   await assertNoRunningCodexProcess();
 
   const activeAuthSource = await requireFileBasedCodexAuthSource(getActiveCodexHome());
-
-  const managedAuthSnapshot = await readExistingFile(account.authPath);
-  const activeAuth = await readAuthFile(activeAuthSource.authPath);
-  assertStoredAccountConsistency(account, activeAuth.accountId);
-  const rollbackFiles = [
-    { path: account.authPath, raw: managedAuthSnapshot },
-    { path: activeAuthSource.authPath, raw: activeAuth.raw },
+  const rollbackFiles: RemovedAuthFile[] = [
+    { path: account.authPath, raw: await readExistingFile(account.authPath) },
   ];
-  await ensureManagedStoragePermissions();
-  if (managedAuthSnapshot !== activeAuth.raw) {
-    logDebug("account.remove.sync_current.write", "Persisting active auth into managed storage before removal.", {
+
+  // Only sign out of the live session when it belongs to the removed account.
+  // A missing file (logout) or another identity (external login) stays untouched.
+  const liveAuthRaw = await readExistingFile(activeAuthSource.authPath);
+  if (liveAuthRaw !== null && extractAccountId(liveAuthRaw) === account.accountId) {
+    rollbackFiles.push({ path: activeAuthSource.authPath, raw: liveAuthRaw });
+  } else {
+    logWarn("account.remove.live_auth.skip", "Live auth does not belong to the removed account. Leaving it untouched.", {
       email: account.email,
-      profileId: account.profileId,
+      liveAuthMissing: liveAuthRaw === null,
     });
-    await writeAuthFile(account.authPath, activeAuth.raw);
   }
 
   const nextState = clearCurrentProfile(removeAccountByProfileId(state, account.profileId));
@@ -112,8 +108,6 @@ async function removeSoleActiveAccount(
     options,
     nextState,
     rollbackFiles,
-    removePaths: [account.authPath, activeAuthSource.authPath],
-    rollbackOnFailure: true,
   });
 
   logDebug("account.remove.success", "Removed sole active account.", {
@@ -135,29 +129,24 @@ async function removeAuthFile(path: string): Promise<void> {
   }
 }
 
+// Removes every file in rollbackFiles, then saves state. Any failure restores
+// the files to their captured contents.
 async function performRemovalTransaction(params: {
   email: string;
   options: RemoveAccountOptions;
   nextState: AppState;
   rollbackFiles: RemovedAuthFile[];
-  removePaths: string[];
-  rollbackOnFailure?: boolean;
 }): Promise<void> {
-  let shouldRollback = params.rollbackOnFailure ?? false;
-
+  params.options.onStageChange?.("removing_auth");
   try {
-    params.options.onStageChange?.("removing_auth");
-    shouldRollback = true;
-    for (const path of params.removePaths) {
-      await removeAuthFile(path);
+    for (const file of params.rollbackFiles) {
+      await removeAuthFile(file.path);
     }
 
     params.options.onStageChange?.("saving_state");
     await saveState(params.nextState);
   } catch (error) {
-    if (shouldRollback) {
-      await rollbackRemovedFiles(params.rollbackFiles, params.email);
-    }
+    await rollbackRemovedFiles(params.rollbackFiles, params.email);
     throw error;
   }
 }
