@@ -117,4 +117,18 @@ describe("withExclusiveLock", () => {
       await expect(pending).rejects.toBeInstanceOf(LockAcquisitionError);
     });
   });
+
+  test("runs the operation once and releases the lock when it throws an EEXIST error", async () => {
+    await withTempHome(async () => {
+      const failure = Object.assign(new Error("file already exists"), { code: "EEXIST" });
+      const operation = vi.fn(async () => {
+        throw failure;
+      });
+
+      await expect(withExclusiveLock("conflict", operation)).rejects.toBe(failure);
+
+      expect(operation).toHaveBeenCalledTimes(1);
+      await expect(withExclusiveLock("next", async () => "acquired")).resolves.toBe("acquired");
+    });
+  });
 });
