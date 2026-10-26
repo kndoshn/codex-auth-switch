@@ -60,6 +60,7 @@ describe("runCommand", () => {
   });
 
   test("emits an error log for handled operational failures", async () => {
+    vi.stubEnv("CODEX_AUTH_SWITCH_LOG_LEVEL", "error");
     const stdout = createBuffer();
     const stderr = createBuffer();
     const command = createMockCommand(stdout, stderr);
@@ -80,6 +81,7 @@ describe("runCommand", () => {
   });
 
   test("emits an error log for unexpected failures", async () => {
+    vi.stubEnv("CODEX_AUTH_SWITCH_LOG_LEVEL", "error");
     const stdout = createBuffer();
     const stderr = createBuffer();
     const command = createMockCommand(stdout, stderr);

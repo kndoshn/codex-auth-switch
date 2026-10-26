@@ -213,7 +213,7 @@ describe("usage-auth helpers", () => {
       text: async () => {
         throw new Error("stream closed");
       },
-    }) satisfies Partial<Response> as Response));
+    }) satisfies Partial<Response> as unknown as Response));
 
     await expect(refreshUsageAuthAfterUnauthorized(
       account,
@@ -278,6 +278,25 @@ describe("usage-auth helpers", () => {
     expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
+  test("reports a timeout while reading the refresh response body", async () => {
+    const account = createAccount("stored@example.com", "profile-stored", "acct-1");
+    const usageAuth = createUsageAuthState();
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => Promise.reject(new DOMException("The operation was aborted due to timeout", "TimeoutError")),
+    }) satisfies Partial<Response> as unknown as Response));
+
+    await expect(refreshUsageAuthAfterUnauthorized(
+      account,
+      usageAuth,
+      new UsageFetchError("unauthorized", "denied"),
+    )).rejects.toMatchObject<Partial<UsageFetchError>>({
+      code: "network_error",
+      message: "Refresh endpoint did not respond within 15 seconds.",
+    });
+  });
+
   test("wraps Error JSON failures from the refresh endpoint", async () => {
     const account = createAccount("stored@example.com", "profile-stored", "acct-1");
     const usageAuth = createUsageAuthState();
@@ -286,7 +305,7 @@ describe("usage-auth helpers", () => {
       ok: true,
       status: 200,
       json: async () => Promise.reject(new Error("refresh payload parse failed")),
-    }) satisfies Partial<Response> as Response));
+    }) satisfies Partial<Response> as unknown as Response));
 
     await expect(refreshUsageAuthAfterUnauthorized(
       account,

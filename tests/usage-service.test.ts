@@ -126,7 +126,7 @@ describe("usage service", () => {
   });
 
   test("prefers the freshest active auth for the current account", async () => {
-    await withTempHome(async (homeDir) => {
+    await withTempHome(async () => {
       const authPath = getCodexAuthPath();
       const currentAccount = {
         ...createAccount("current@example.com", "acct-current", "profile-current"),
@@ -183,7 +183,7 @@ describe("usage service", () => {
         lastRefresh: "2026-04-04T00:00:00.000Z",
       });
 
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
         expect(url).not.toBe("https://auth.openai.com/oauth/token");
         expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer token-current-active");
@@ -229,7 +229,7 @@ describe("usage service", () => {
         lastRefresh: "2026-04-16T00:00:00.000Z",
       });
 
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
         const url = String(input);
         expect(url).not.toBe("https://auth.openai.com/oauth/token");
         return new Response("{}", { status: 401 });
@@ -256,7 +256,7 @@ describe("usage service", () => {
       });
 
       const observedTokens: string[] = [];
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
         if (url === "https://auth.openai.com/oauth/token") {
           expect(JSON.parse(String(init?.body))).toEqual({
@@ -318,7 +318,7 @@ describe("usage service", () => {
         lastRefresh: "2026-04-04T00:00:00.000Z",
       });
 
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
         const url = String(input);
         if (url === "https://auth.openai.com/oauth/token") {
           return new Response(JSON.stringify({
@@ -367,7 +367,7 @@ describe("usage service", () => {
         lastRefresh: "2026-04-04T00:00:00.000Z",
       });
 
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
         if (url === "https://auth.openai.com/oauth/token") {
           throw new Error("refresh temporarily unavailable");
@@ -417,7 +417,7 @@ describe("usage service", () => {
       });
 
       const observedTokens: string[] = [];
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
         if (url === "https://auth.openai.com/oauth/token") {
           return new Response(JSON.stringify({
@@ -478,7 +478,7 @@ describe("usage service", () => {
         lastRefresh: "2026-04-16T00:00:00.000Z",
       });
 
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
         if (url === "https://auth.openai.com/oauth/token") {
           expect(JSON.parse(String(init?.body))).toMatchObject({
@@ -514,7 +514,7 @@ describe("usage service", () => {
         lastRefresh: "2026-04-16T00:00:00.000Z",
       });
 
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
         const url = String(input);
         if (url === "https://auth.openai.com/oauth/token") {
           return new Response(JSON.stringify({
@@ -545,7 +545,7 @@ describe("usage service", () => {
         lastRefresh: "2026-04-16T00:00:00.000Z",
       });
 
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
         const url = String(input);
         if (url === "https://auth.openai.com/oauth/token") {
           return new Response(JSON.stringify({
@@ -576,7 +576,7 @@ describe("usage service", () => {
         lastRefresh: "2026-04-16T00:00:00.000Z",
       });
 
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
         const url = String(input);
         if (url === "https://auth.openai.com/oauth/token") {
           return new Response("{", { status: 401 });
@@ -605,7 +605,7 @@ describe("usage service", () => {
         lastRefresh: "2026-04-16T00:00:00.000Z",
       });
 
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
         const url = String(input);
         if (url === "https://auth.openai.com/oauth/token") {
           return new Response("{}", { status: 400 });
@@ -634,7 +634,7 @@ describe("usage service", () => {
         lastRefresh: "2026-04-16T00:00:00.000Z",
       });
 
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
         const url = String(input);
         if (url === "https://auth.openai.com/oauth/token") {
           return new Response("{}", { status: 503 });
@@ -663,14 +663,14 @@ describe("usage service", () => {
         lastRefresh: "2026-04-16T00:00:00.000Z",
       });
 
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
         const url = String(input);
         if (url === "https://auth.openai.com/oauth/token") {
           return {
             ok: true,
             status: 200,
             json: async () => Promise.reject("bad json"),
-          } satisfies Partial<Response> as Response;
+          } satisfies Partial<Response> as unknown as Response;
         }
 
         return new Response("{}", { status: 401 });
@@ -696,7 +696,7 @@ describe("usage service", () => {
         lastRefresh: "2026-04-16T00:00:00.000Z",
       });
 
-      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
         const url = String(input);
         if (url === "https://auth.openai.com/oauth/token") {
           return new Response(JSON.stringify({
@@ -746,7 +746,7 @@ describe("usage service", () => {
         ok: true,
         status: 200,
         json: async () => Promise.reject("bad json"),
-      } satisfies Partial<Response> as Response)));
+      } satisfies Partial<Response> as unknown as Response)));
 
       const result = await fetchUsage(account);
 
@@ -1104,9 +1104,9 @@ describe("usage service", () => {
       ];
 
       await Promise.all([
-        writeAuthFile(accounts[0].authPath, "token-c", "acct-c"),
-        writeAuthFile(accounts[1].authPath, "token-a", "acct-a"),
-        writeAuthFile(accounts[2].authPath, "token-b", "acct-b"),
+        writeAuthFile(accounts[0]!.authPath, "token-c", "acct-c"),
+        writeAuthFile(accounts[1]!.authPath, "token-a", "acct-a"),
+        writeAuthFile(accounts[2]!.authPath, "token-b", "acct-b"),
       ]);
 
       vi.stubGlobal("fetch", vi.fn(async (_input: unknown, init?: RequestInit) => {
@@ -1190,8 +1190,8 @@ describe("usage service", () => {
       ];
 
       await Promise.all([
-        writeAuthFile(accounts[0].authPath, "token-b", "acct-b"),
-        writeAuthFile(accounts[1].authPath, "token-a", "acct-a"),
+        writeAuthFile(accounts[0]!.authPath, "token-b", "acct-b"),
+        writeAuthFile(accounts[1]!.authPath, "token-a", "acct-a"),
       ]);
 
       vi.stubGlobal("fetch", vi.fn(async (_input: unknown, init?: RequestInit) => {

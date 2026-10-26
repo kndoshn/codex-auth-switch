@@ -35,7 +35,7 @@ describe("usage-endpoint", () => {
       ok: true,
       status: 200,
       json: async () => Promise.reject("bad json"),
-    }) satisfies Partial<Response> as Response));
+    }) satisfies Partial<Response> as unknown as Response));
 
     await expect(requestUsagePayload("token")).rejects.toMatchObject<Partial<UsageFetchError>>({
       code: "malformed_response",
@@ -48,7 +48,7 @@ describe("usage-endpoint", () => {
       ok: true,
       status: 200,
       json: async () => Promise.reject(new Error("unexpected end of json input")),
-    }) satisfies Partial<Response> as Response));
+    }) satisfies Partial<Response> as unknown as Response));
 
     await expect(requestUsagePayload("token")).rejects.toMatchObject<Partial<UsageFetchError>>({
       code: "malformed_response",
@@ -61,7 +61,7 @@ describe("usage-endpoint", () => {
       ok: true,
       status: 200,
       json: async () => ({}),
-    }) satisfies Partial<Response> as Response);
+    }) satisfies Partial<Response> as unknown as Response);
     vi.stubGlobal("fetch", fetchMock);
 
     await requestUsagePayload("token");
@@ -85,7 +85,7 @@ describe("usage-endpoint", () => {
       ok: true,
       status: 200,
       json: async () => Promise.reject(new DOMException("The operation was aborted due to timeout", "TimeoutError")),
-    }) satisfies Partial<Response> as Response));
+    }) satisfies Partial<Response> as unknown as Response));
 
     await expect(requestUsagePayload("token")).rejects.toMatchObject<Partial<UsageFetchError>>({
       code: "network_error",

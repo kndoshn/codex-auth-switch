@@ -75,6 +75,39 @@ describe("withExclusiveLock", () => {
     });
   });
 
+  test("removes a lock whose owner metadata has the wrong shape", async () => {
+    await withTempHome(async () => {
+      const lockPath = getLockPath();
+      await mkdir(lockPath, { recursive: true });
+      await writeFile(join(lockPath, "owner.json"), JSON.stringify({ pid: "not-a-number" }), "utf8");
+
+      await expect(withExclusiveLock("recover", async () => "ok")).resolves.toBe("ok");
+    });
+  });
+
+  test("waits out the grace period before removing a fresh lock without owner metadata", async () => {
+    // Freeze only Date so the retry delay stays real and the grace window is explicit.
+    const now = new Date("2026-04-05T00:00:00.000Z");
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(now);
+
+    await withTempHome(async () => {
+      const lockPath = getLockPath();
+      await mkdir(lockPath, { recursive: true });
+      const createdAt = new Date(now.getTime() - 4_000);
+      await utimes(lockPath, createdAt, createdAt);
+      const operation = vi.fn(async () => "ok");
+
+      const pending = withExclusiveLock("recover", operation);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(operation).not.toHaveBeenCalled();
+
+      vi.setSystemTime(new Date(now.getTime() + 2_000));
+      await expect(pending).resolves.toBe("ok");
+      expect(operation).toHaveBeenCalledTimes(1);
+    });
+  });
+
   test("removes a stale lock owned by a dead process", async () => {
     await withTempHome(async () => {
       const lockPath = getLockPath();

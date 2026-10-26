@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -39,7 +39,7 @@ describe("usage-fetch helpers", () => {
   });
 
   test("uses the stored auth path for non-current accounts", async () => {
-    await withTempHome(async (homeDir) => {
+    await withTempHome(async () => {
       const account = createAccount("stored@example.com", "profile-stored", "acct-stored");
       await saveState({
         currentProfileId: "another-profile",
