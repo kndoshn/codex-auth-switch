@@ -4,11 +4,11 @@
   "description": "Switch Codex CLI personal accounts and inspect usage.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kndoshn/codex-switch.git"
+    "url": "git+https://github.com/kndoshn/codex-auth-switch.git"
   },
-  "homepage": "https://github.com/kndoshn/codex-switch#readme",
+  "homepage": "https://github.com/kndoshn/codex-auth-switch#readme",
   "bugs": {
-    "url": "https://github.com/kndoshn/codex-switch/issues"
+    "url": "https://github.com/kndoshn/codex-auth-switch/issues"
   },
   "keywords": [
     "codex",

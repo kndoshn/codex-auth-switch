@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { describe, expect, test } from "vitest";
 import { execa } from "execa";
 
@@ -69,5 +71,16 @@ describe("CLI integration", () => {
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain("No active account label is selected.");
     });
+  });
+
+  test("reports the package version", async () => {
+    const packageJson = JSON.parse(await readFile("package.json", "utf8")) as { version: string };
+    const result = await execa(process.execPath, ["--import", "tsx", "src/index.ts", "--version"], {
+      cwd: process.cwd(),
+      reject: false,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.trim()).toBe(packageJson.version);
   });
 });
